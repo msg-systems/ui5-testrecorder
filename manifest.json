@@ -1,0 +1,32 @@
+{
+    "name": "UI5 E2E Test-Automation",
+    "version": "0.0.1",
+    "manifest_version": 2,
+    "description": "UI5 E2E Test-Automation",
+    "homepage_url": "http://www.google.de",
+    "background": {
+        "persistence": false,
+        "scripts": [
+            "/scripts/background/main.js"
+        ]
+    },
+    "web_accessible_resources": [
+        "/scripts/injected/*.js",
+        "/scripts/injected/*.xml",
+        "/scripts/injected/*.css"
+    ],
+    "browser_action": {
+        "default_title": "UI5 Test-Automation",
+        "default_icon": "/target_bright.png"
+    },
+    "icons": {
+        "16": "/target_black.png",
+        "48": "/target_black.png",
+        "128": "/target_black.png"
+    },
+    "permissions": [
+        "tabs",
+        "contextMenus",
+        "<all_urls>"
+    ]
+}

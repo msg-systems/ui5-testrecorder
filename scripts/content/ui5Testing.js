@@ -1,0 +1,73 @@
+/*!
+* SAP
+* (c) Copyright 2015 SAP SE or an SAP affiliate company.
+* Licensed under the Apache License, Version 2.0 - see LICENSE.txt.
+*/
+(function e(t, n, r) { function s(o, u) { if (!n[o]) { if (!t[o]) { var a = typeof require == "function" && require; if (!u && a) return a(o, !0); if (i) return i(o, !0); var f = new Error("Cannot find module '" + o + "'"); throw f.code = "MODULE_NOT_FOUND", f } var l = n[o] = { exports: {} }; t[o][0].call(l.exports, function (e) { var n = t[o][1][e]; return s(n ? n : e) }, l, l.exports, e, t, n, r) } return n[o].exports } var i = typeof require == "function" && require; for (var o = 0; o < r.length; o++)s(r[o]); return s })({
+    1: [function (require, module, exports) {
+        (function () {
+            'use strict';
+
+            // Inject a script file in the current page
+            var script = document.createElement('script');
+            script.src = chrome.extension.getURL('/scripts/injected/ui5Testing.js');
+            document.head.appendChild(script);
+
+            var head = document.getElementsByTagName('head')[0];
+            var link = document.createElement('link');
+            link.id = "testing_ui5";
+            link.rel = 'stylesheet';
+            link.type = 'text/css';
+            link.href = chrome.extension.getURL('/scripts/injected/style.css');
+            link.media = 'all';
+            head.appendChild(link);
+
+            /**
+             * Delete the injected file, when it is loaded.
+             */
+            script.onload = function () {
+                script.parentNode.removeChild(script);
+
+                //send the data
+                var sUrl = chrome.extension.getURL('/scripts/injected/Popover.fragment.xml');
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', sUrl );
+                xhr.send(null);
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState === 4) {
+                        document.dispatchEvent(new CustomEvent('do-ui5-send-xml-view', { detail: xhr.responseText }));
+                        document.dispatchEvent(new CustomEvent('do-ui5-start'));
+                    }
+                };
+            };
+
+            var oLastDom = null;
+            
+            document.addEventListener("mousedown", function (event) {
+                //right click
+                if (event.button == 2) {
+                    oLastDom = event.target;
+                }
+            }, true);
+
+            chrome.runtime.onMessage.addListener(
+                function (request, sender, sendResponse) {
+                    sendResponse({ ui5TestingRegistered: true });
+                    if (request.startForControl) {
+                        if (oLastDom) {
+                            document.dispatchEvent(new CustomEvent('do-ui5-start', { detail: { domId: oLastDom.id }}));
+                            return;
+                        }
+                    } else if (request.checkRegistration) {
+                        sendResponse(true);
+                        return;
+                    } else if (request.showCode) {
+                        document.dispatchEvent(new CustomEvent('do-show-code'));
+                        return;
+                    }
+                    document.dispatchEvent(new CustomEvent('do-ui5-switch'));
+                });
+        }());
+
+    }, {}]
+}, {}, [1]);
