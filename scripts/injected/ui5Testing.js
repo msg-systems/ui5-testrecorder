@@ -10,24 +10,35 @@ sap.ui.define([
     var TestHandler = Object.extend("com.tru.TestHandler", {
         _oDialog: null,
         _oModel: new JSONModel({
-            assKey: "ATR",
-            assKeyMatchingCount: 1,
-            assertMessage: "",
+            element: {
+                property: {}, //properties
+                item: {}, //current item itself,
+                attributeFilter: [], //table entries of selectors
+                assertFilter: [], //table entries of asserts
+            },
+            elements: [],
+            elementDefault: {
+                property: {
+                    assKeyMatchingCount: 1,
+                    assKey: "ATR",
+                    assertMessage: "",
+                    selectActInsert: "",
+                    actKey: "PRS",
+                    type: "ACT",
+                    selectItemBy: "UI5",
+                    identifiedElements: [], //elements which are fitting to the current selector
+                    previewCode: ""
+                },
+                item: {},
+                attributeFilter: [],
+                assertFilter: []
+            },
             showTargetElement: true,
-            selectItemBy: "UI5",
-            previewCode: "",
             completeCode: "",
             completeCodeSaved: "",
-            selectActInsert: "",
-            type: "SEL",
             idQualityState: ValueState.None,
             idQualityStateText: "",
-            actKey: "PRS",
-            codeLines: [], //currently maintained code-lines
-            identifiedElements: [], //elements which are fitting to the current selector
-            assertFilter: [], //table entries of asserts
-            attributeFilter: [], //table entries of selectors
-            item: {} //current item itself
+            codeLines: [] //currently maintained code-lines
         }),
         _bActive: false,
         _bStarted: false,
@@ -50,21 +61,24 @@ sap.ui.define([
 
     TestHandler.prototype._onSave = function () {
         this._checkAndDisplay(function () {
-            var oItem = this._oModel.getProperty("/item");
+            var oItem = this._oModel.getProperty("/element/item");
             var sCodeCurrent = this._getCodeFromItem(oItem);
             var sCodeTotal = this._oModel.getProperty("/completeCodeSaved");
             sCodeTotal = sCodeTotal + sCodeCurrent + "\n";
             this._oModel.setProperty("/completeCodeSaved", sCodeTotal);
-            this._oModel.setProperty("/previewCode", "");
             this._oDialog.close();
+
+            var aElements = this._oModel.getProperty("/elements");
+            aElements.push(this._oModel.getProperty("/element"));
+            this._oModel.setProperty("/elements", aElements);
 
             this._executeAction(oItem);
         }.bind(this));
     };
 
     TestHandler.prototype._getFinalDomNode = function (oElement) {
-        var sActType = this._oModel.getProperty("/actKey"); //PRS|OPT|TYP
-        var sSelectType = this._oModel.getProperty("/selectItemBy"); //DOM | UI5 | ATTR
+        var sActType = this._oModel.getProperty("/element/property/actKey"); //PRS|OPT|TYP
+        var sSelectType = this._oModel.getProperty("/element/property/selectItemBy"); //DOM | UI5 | ATTR
         var sExtension = this._getSelectorExtension(oElement.control, sActType, sSelectType);
         if (!sExtension.length) {
             return $(oElement.dom);
@@ -74,11 +88,11 @@ sap.ui.define([
     };
 
     TestHandler.prototype._executeAction = function () {
-        var sType = this._oModel.getProperty("/type");
+        var sType = this._oModel.getProperty("/element/property/type");
         if (sType !== "ACT") {
             return false;
         }
-        var sActType = this._oModel.getProperty("/actKey"); //PRS|OPT|TYP
+        var sActType = this._oModel.getProperty("/element/property/actKey"); //PRS|OPT|TYP
 
         var aFound = this._getFoundElements();
         if (aFound.length === 0) {
@@ -96,7 +110,7 @@ sap.ui.define([
         } else if (sActType === "TYP") {
             var e = jQuery.Event("keypress");
             e.which = 13; // Enter
-            oDom.val(this._oModel.getProperty("/selectActInsert"));
+            oDom.val(this._oModel.getProperty("/element/property/selectActInsert"));
             oDom.trigger(e);
         }
     };
@@ -107,12 +121,12 @@ sap.ui.define([
     //(3) DOM-ID is used (should be avoided where possible)
     //(4) No or >1 Element is selected..
     TestHandler.prototype._checkAndDisplay = function (fnCallback) {
-        var oItem = this._oModel.getProperty("/item");
+        var oItem = this._oModel.getProperty("/element/item");
         var bShowMessage = false;
-        var sSelectType = this._oModel.getProperty("/selectItemBy");
-        var sType = this._oModel.getProperty("/type");
+        var sSelectType = this._oModel.getProperty("/element/property/selectItemBy");
+        var sType = this._oModel.getProperty("/element/property/type");
         var sMessage = "";
-        var sExpectedCount = this._oModel.getProperty("/assKeyMatchingCount");
+        var sExpectedCount = this._oModel.getProperty("/element/property/assKeyMatchingCount");
         if (oItem.identifier.idGenerated == true && sSelectType === "UI5") {
             sMessage = "You are probably using a generated ID which will be unstable.\nPlease provide a static id if possible, or use attribute Selectors.";
             bShowMessage = true;
@@ -186,16 +200,16 @@ sap.ui.define([
     };
 
     TestHandler.prototype._updatePreview = function () {
-        var oItem = this._oModel.getProperty("/item");
+        var oItem = this._oModel.getProperty("/element/item");
 
         //(1) update code
         var sCode = this._getCodeFromItem(oItem);
         var sCodeTotal = this._oModel.getProperty("/completeCodeSaved");
         sCodeTotal = sCodeTotal + sCode;
-        this._oModel.setProperty("/previewCode", sCodeTotal);
+        this._oModel.setProperty("/element/property/previewCode", sCodeTotal);
 
         //(2) update items..
-        this._oModel.setProperty("/identifiedElements", this._getFoundElements());
+        this._oModel.setProperty("/element/property/identifiedElements", this._getFoundElements());
     };
 
     TestHandler.prototype._findItemAndExclude = function (oSelector) {
@@ -225,33 +239,33 @@ sap.ui.define([
         var sSelector = "";
         var sSelectorAttributes = "";
         var sSelectorAttributesStringified = null;
-        var oItem = this._oModel.getProperty("/item");
-        var sActType = this._oModel.getProperty("/actKey"); //PRS|OPT|TYP
-        var sSelectType = this._oModel.getProperty("/selectItemBy"); //DOM | UI5 | ATTR
+        var oItem = this._oModel.getProperty("/element/item");
+        var sActType = this._oModel.getProperty("/element/property/actKey"); //PRS|OPT|TYP
+        var sSelectType = this._oModel.getProperty("/element/property/selectItemBy"); //DOM | UI5 | ATTR
         var sSelectorExtension = this._getSelectorExtension(oItem.control, sActType, sSelectType);
 
         if (sSelectType === "DOM") {
             sSelector = "Selector";
-            sSelectorAttributes = '"#' + this._oModel.getProperty("/item/identifier/domId") + sSelectorExtension + '"';
+            sSelectorAttributes = '"#' + this._oModel.getProperty("/element/item/identifier/domId") + sSelectorExtension + '"';
         } else if (sSelectType === "UI5") {
             sSelector = "UI5Selector";
-            sSelectorAttributes = '"' + this._oModel.getProperty("/item/identifier/ui5Id") + sSelectorExtension + '"';
+            sSelectorAttributes = '"' + this._oModel.getProperty("/element/item/identifier/ui5Id") + sSelectorExtension + '"';
         } else if (sSelectType === "ATTR") {
             sSelector = "UI5Selector";
-            var aAttributes = this._oModel.getProperty("/attributeFilter");
+            var aAttributes = this._oModel.getProperty("/element/attributeFilter");
             if (sSelectorExtension) {
-                $.extend(oScope, true, sSelectorExtension);
+                $.extend(true, oScope, sSelectorExtension);
             }
 
             for (var i = 0; i < aAttributes.length; i++) {
                 var oAttribute = aAttributes[i];
-                var oLocalScope = this._attributeTypes[oAttribute.attributeType].getScope(oScope);
                 var oSpec = this._getValueSpec(oAttribute);
                 if (oSpec === null) {
                     continue;
                 }
-                //extent the current local scope with the code extensions..
-                $.extend(oLocalScope, true, oSpec.code(oAttribute.criteriaValue));
+                //extent the current local scope with the code extensions..x
+                var oScopeLocal = this._attributeTypes[oAttribute.attributeType].getScope(oScope);
+                $.extend(true, oScopeLocal, oSpec.code(oAttribute.criteriaValue));
             }
 
             sSelectorAttributes = oScope;
@@ -266,8 +280,8 @@ sap.ui.define([
     };
 
     TestHandler.prototype._getCodeFromItem = function (oItem) {
-        var sType = this._oModel.getProperty("/type"); // SEL | ACT | ASS
-        var sActType = this._oModel.getProperty("/actKey"); //PRS|OPT|TYP
+        var sType = this._oModel.getProperty("/element/property/type"); // SEL | ACT | ASS
+        var sActType = this._oModel.getProperty("/element/property/actKey"); //PRS|OPT|TYP
         var sCode = "";
 
         //(1) first: build up the actual selector
@@ -300,18 +314,18 @@ sap.ui.define([
 
             sCode = sCode + sAction + "(" + sSelectorFinal;
             if (sActType == "TYP") {
-                sCode = sCode + ',"' + this._oModel.getProperty("/selectActInsert") + '"';
+                sCode = sCode + ',"' + this._oModel.getProperty("/element/property/selectActInsert") + '"';
             }
             sCode = sCode + ");";
         } else if (sType === 'ASS') {
             //we must add one line per basic code..
-            var aAsserts = this._oModel.getProperty("/assertFilter");
+            var aAsserts = this._oModel.getProperty("/element/assertFilter");
             var oAssertScope = {};
 
             var sBasisCode = "await t.expect(" + sSelectorFinal;
-            var sAssertType = this._oModel.getProperty("/assKey");
-            var sAssertMsg = this._oModel.getProperty("/assertMessage");
-            var sAssertCount = this._oModel.getProperty("/assKeyMatchingCount");
+            var sAssertType = this._oModel.getProperty("/element/property/assKey");
+            var sAssertMsg = this._oModel.getProperty("/element/property/assertMessage");
+            var sAssertCount = this._oModel.getProperty("/element/property/assKeyMatchingCount");
             if (sAssertType === 'ATR') {
                 sBasisCode += ".getUI5(" + "({ element }) => element.";
                 for (var x = 0; x < aAsserts.length; x++) {
@@ -342,7 +356,7 @@ sap.ui.define([
                     }
                     sAddCode += ");";
                     sCode += sAddCode + "\n";
-                    $.extend(oAssertLocalScope, true, oAssertSpec.assert(oAssert.criteriaValue));
+                    $.extend(true, oAssertLocalScope, oAssertSpec.assert(oAssert.criteriaValue));
                 }
             } else if (sAssertType === "EXS") {
                 sCode = sBasisCode + ".exists).ok(";
@@ -371,6 +385,19 @@ sap.ui.define([
         return null;
     };
 
+    TestHandler.prototype._getOwnerComponent = function (oItem) {
+        var sCurrentComponent = "";
+        var oParent = oItem;
+        while (oParent && oParent.getParent) {
+            if (oParent.getController && oParent.getController() && oParent.getController().getOwnerComponent && oParent.getController().getOwnerComponent()) {
+                sCurrentComponent = oParent.getController().getOwnerComponent().getId();
+                break;
+            }
+            oParent = oParent.getParent();
+        }
+        return sCurrentComponent;
+    };
+
     TestHandler.prototype._getUi5LocalId = function (oItem) {
         var sId = oItem.getId();
         if (sId.lastIndexOf("-") !== -1) {
@@ -384,7 +411,7 @@ sap.ui.define([
         var oParent = oItem;
         var sCurrentComponent = "";
         while (oParent && oParent.getParent) {
-            if (oParent.getController && oParent.getController().getOwnerComponent && oParent.getController().getOwnerComponent()) {
+            if (oParent.getController && oParent.getController() && oParent.getController().getOwnerComponent && oParent.getController().getOwnerComponent()) {
                 sCurrentComponent = oParent.getController().getOwnerComponent().getId();
                 break;
             }
@@ -418,6 +445,11 @@ sap.ui.define([
 
     TestHandler.prototype._setItem = function (oControl, oDomNode) {
         var oItem = this._getElementInformation(oControl, oDomNode);
+        oItem.aggregationArray = [];
+        for (var sKey in oItem.aggregation) {
+            oItem.aggregationArray.push(oItem.aggregation[sKey]);
+        }
+
         if (this._oCurrentDomNode) {
             $(this._oCurrentDomNode).removeClass('HVRReveal');
         }
@@ -426,9 +458,9 @@ sap.ui.define([
             $(this._oCurrentDomNode).addClass('HVRReveal');
         }
 
-        this._oModel.setProperty("/item", oItem);
-        this._oModel.setProperty("/attributeFilter", []);
-        this._oModel.setProperty("/assertFilter", []);
+        this._oModel.setProperty("/element/item", oItem);
+        this._oModel.setProperty("/element/attributeFilter", []);
+        this._oModel.setProperty("/element/assertFilter", []);
 
         this._updateValueState(oItem);
         this._updatePreview();
@@ -449,7 +481,7 @@ sap.ui.define([
     };
 
     TestHandler.prototype.onAddAttribute = function (oEvent) {
-        this._add("/attributeFilter");
+        this._add("/element/attributeFilter");
     };
 
     TestHandler.prototype.onRemoveAttribute = function (oEvent) {
@@ -495,7 +527,7 @@ sap.ui.define([
     };
 
     TestHandler.prototype.onAddAssertion = function (oEvent) {
-        this._add("/assertFilter");
+        this._add("/element/assertFilter");
     };
 
     TestHandler.prototype.onAttributeTypeChanged = function (oEvent) {
@@ -518,7 +550,8 @@ sap.ui.define([
         if (!this._oDialog) {
             this._oDialog = sap.ui.xmlfragment({
                 fragmentContent: this._sXMLPage,
-                fragmentName: "testDialog"
+                fragmentName: "testDialog",
+                id: "testDialog"
             }, this);
             this._oDialog.setModel(this._oModel, "viewModel");
             this._oDialog.attachBeforeClose(null, function () {
@@ -542,14 +575,7 @@ sap.ui.define([
 
         this._createDialog();
 
-        this._oModel.setProperty("/assKey", "ATR");
-        this._oModel.setProperty("/assKeyMatchingCount", 1);
-        this._oModel.setProperty("/assertMessage", "");
-        this._oModel.setProperty("/selectItemBy", "UI5");
-        this._oModel.setProperty("/previewCode", "");
-        this._oModel.setProperty("/selectActInsert", "");
-        this._oModel.setProperty("/type", "ACT");
-        this._oModel.setProperty("/actKey", "PRS");
+        this._oModel.setProperty("/element", this._oModel.getProperty("/elementDefault"));
         this._oModel.setProperty("/showTargetElement", true);
 
         this._setItem(oControl, oDomNode);
@@ -559,6 +585,10 @@ sap.ui.define([
     TestHandler.prototype.switch = function () {
         this._bActive = this._bActive !== true;
         this._bStarted = this._bActive;
+        if (this._bActive === false) {
+            //show code after finalizing
+            this.showCode();
+        }
     };
 
     TestHandler.prototype._start = function () {
@@ -573,7 +603,7 @@ sap.ui.define([
     TestHandler.prototype.showCode = function (sId) {
         this._bActive = false;
         this._oModel.setProperty("/showTargetElement", false);
-        this._oModel.setProperty("/previewCode", this._oModel.getProperty("/completeCodeSaved"));
+        this._oModel.setProperty("/element/property/previewCode", this._oModel.getProperty("/completeCodeSaved"));
         this._createDialog();
         this._oDialog.open();
     };
@@ -647,7 +677,7 @@ sap.ui.define([
     TestHandler.prototype._updateAttributeTypes = function (oCtx) {
         var oAttribute = this._oModel.getProperty(oCtx.getPath());
         var oAttributeSettings = this._attributeTypes[oAttribute.attributeType];
-        oAttribute.item = oAttributeSettings.getItem(this._oModel.getProperty("/item"));
+        oAttribute.item = oAttributeSettings.getItem(this._oModel.getProperty("/element/item"));
         oAttribute.criteriaTypes = oAttributeSettings.criteriaTypes;
         oAttribute.criteriaType = oAttribute.criteriaTypes[0].criteriaKey;
         this._oModel.setProperty(oCtx.getPath(), oAttribute);
@@ -752,7 +782,19 @@ sap.ui.define([
                         assert: function () {
                             return "metadata.elementName"
                         }
-                    }];
+                    }, {
+                            subCriteriaKey: "CMP",
+                            subCriteriaText: "Component-Name",
+                            value: function (oItem) {
+                                return oItem.metadata.componentName;
+                            }.bind(this),
+                            code: function (sValue) {
+                                return { metadata: { componentName: sValue } }
+                            },
+                            assert: function () {
+                                return "metadata.componentName"
+                            }
+                        }];
                 }.bind(this)
             },
             "AGG": {
@@ -1011,17 +1053,22 @@ sap.ui.define([
                 return sId;
             };
 
-            var _getUi5Id = function (oItem) {
-                //remove all component information from the control
-                var oParent = oItem;
+            var _getOwnerComponent = function (oParent) {
                 var sCurrentComponent = "";
                 while (oParent && oParent.getParent) {
-                    if (oParent.getController && oParent.getController().getOwnerComponent && oParent.getController().getOwnerComponent()) {
+                    if (oParent.getController && oParent.getController() && oParent.getController().getOwnerComponent && oParent.getController().getOwnerComponent()) {
                         sCurrentComponent = oParent.getController().getOwnerComponent().getId();
                         break;
                     }
                     oParent = oParent.getParent();
                 }
+                return sCurrentComponent;
+            };
+
+            var _getUi5Id = function (oItem) {
+                //remove all component information from the control
+                var oParent = oItem;
+                var sCurrentComponent = _getOwnerComponent(oParent);
                 if (!sCurrentComponent.length) {
                     return sId;
                 }
@@ -1041,6 +1088,9 @@ sap.ui.define([
                 }
                 if (id.metadata) {
                     if (id.metadata.elementName && id.metadata.elementName !== oItem.getMetadata().getElementName()) {
+                        return false;
+                    }
+                    if (id.metadata.componentName && id.metadata.componentName !== _getOwnerComponent( oItem ) ) {
                         return false;
                     }
                 }
@@ -1079,7 +1129,7 @@ sap.ui.define([
                 }
                 if (id.context) {
                     for (var sModel in id.context) {
-                        var oCtx = oItem.getBindingContext(sModel);
+                        var oCtx = oItem.getBindingContext(sModel === "undefined" ? undefined : sModel);
                         if (!oCtx) {
                             return false;
                         }
@@ -1188,7 +1238,7 @@ sap.ui.define([
     TestHandler.prototype._getElementInformation = function (oItem, oDomNode) {
         var oReturn = {
             property: {},
-            aggregation: [],
+            aggregation: {},
             association: {},
             context: {},
             metadata: {},
@@ -1224,17 +1274,22 @@ sap.ui.define([
             return sId;
         };
 
-        var _getUi5Id = function (oItem) {
-            //remove all component information from the control
-            var oParent = oItem;
+        var _getOwnerComponent = function (oParent) {
             var sCurrentComponent = "";
             while (oParent && oParent.getParent) {
-                if (oParent.getController && oParent.getController().getOwnerComponent && oParent.getController().getOwnerComponent()) {
+                if (oParent.getController && oParent.getController() && oParent.getController().getOwnerComponent && oParent.getController().getOwnerComponent()) {
                     sCurrentComponent = oParent.getController().getOwnerComponent().getId();
                     break;
                 }
                 oParent = oParent.getParent();
             }
+            return sCurrentComponent;
+        };
+
+        var _getUi5Id = function (oItem) {
+            //remove all component information from the control
+            var oParent = oItem;
+            var sCurrentComponent = _getOwnerComponent(oParent);
             if (!sCurrentComponent.length) {
                 return "";
             }
@@ -1257,8 +1312,8 @@ sap.ui.define([
             }
 
             var oModel = {};
-            oModel = $.extend(oModel, true, oItem.oModels);
-            oModel = $.extend(oModel, true, oItem.oPropagatedProperties.oModels);
+            oModel = $.extend(true, oModel, oItem.oModels);
+            oModel = $.extend(true, oModel, oItem.oPropagatedProperties.oModels);
 
             //second, get all binding contexts
             for (var sModel in oModel) {
@@ -1355,7 +1410,8 @@ sap.ui.define([
 
             //get metadata..
             oReturn.metadata = {
-                elementName: oItem.getMetadata().getElementName()
+                elementName: oItem.getMetadata().getElementName(),
+                componentName: _getOwnerComponent( oItem )
             };
 
             //return length of all aggregations
@@ -1382,7 +1438,7 @@ sap.ui.define([
                         context: fnGetContexts(aAggregation[i]),
                         ui5Id: _getUi5Id(aAggregation[i]),
                         ui5AbsoluteId: aAggregation[i].getId(),
-                        ui5Control: aAggregation[i]
+                        control: aAggregation[i]
                     });
                 }
                 oReturn.aggregation[oAggregationInfo.name] = oAggregationInfo;
@@ -1391,7 +1447,7 @@ sap.ui.define([
             return oReturn;
         };
 
-        oReturn = $.extend(oReturn, true, fnGetElementInformation(oItem, oDomNode));
+        oReturn = $.extend(true, oReturn, fnGetElementInformation(oItem, oDomNode));
 
         //get all parents, and attach the same information in the same structure
         var oParent = oItem.getParent();

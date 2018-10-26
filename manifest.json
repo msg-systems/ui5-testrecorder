@@ -1,6 +1,6 @@
 {
     "name": "UI5 E2E Test-Automation",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "manifest_version": 2,
     "description": "UI5 E2E Test-Automation",
     "homepage_url": "https://github.com/timostark/ui5TestAutomation",
