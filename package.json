@@ -4,7 +4,7 @@
     "version": "0.0.1",
     "repository": {
         "type": "git",
-        "url": "none"
+        "url": "https://github.com/timostark/ui5TestAutomation.git"
     },
     "devDependencies": {
         "eslint": "^5.7.0"
