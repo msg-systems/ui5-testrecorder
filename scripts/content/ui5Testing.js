@@ -22,6 +22,14 @@
             link.media = 'all';
             head.appendChild(link);
 
+            var oInitializedPromise = new Promise(function (resolve, reject) {
+                document.addEventListener('do-ui5-ok', function (oXMLEvent) {
+                    if (!oXMLEvent.detail.ok) {
+                        reject();
+                    }
+                    resolve();
+                });
+            });
             /**
              * Delete the injected file, when it is loaded.
              */
@@ -31,42 +39,45 @@
                 //send the data
                 var sUrl = chrome.extension.getURL('/scripts/injected/Popover.fragment.xml');
                 var xhr = new XMLHttpRequest();
-                xhr.open('GET', sUrl );
+                xhr.open('GET', sUrl);
                 xhr.send(null);
                 xhr.onreadystatechange = function () {
                     if (xhr.readyState === 4) {
-                        document.dispatchEvent(new CustomEvent('do-ui5-send-xml-view', { detail: xhr.responseText }));
-                        document.dispatchEvent(new CustomEvent('do-ui5-start'));
+                        oInitializedPromise.then(function () {
+                            document.dispatchEvent(new CustomEvent('do-ui5-send-xml-view', { detail: xhr.responseText }));
+                            document.dispatchEvent(new CustomEvent('do-ui5-start'));
+                        });
                     }
                 };
             };
 
-            var oLastDom = null;
-            
-            document.addEventListener("mousedown", function (event) {
-                //right click
-                if (event.button == 2) {
-                    oLastDom = event.target;
-                }
-            }, true);
+            oInitializedPromise.then(function () {
+                var oLastDom = null;
+                document.addEventListener("mousedown", function (event) {
+                    //right click
+                    if (event.button == 2) {
+                        oLastDom = event.target;
+                    }
+                }, true);
 
-            chrome.runtime.onMessage.addListener(
-                function (request, sender, sendResponse) {
-                    sendResponse({ ui5TestingRegistered: true });
-                    if (request.startForControl) {
-                        if (oLastDom) {
-                            document.dispatchEvent(new CustomEvent('do-ui5-start', { detail: { domId: oLastDom.id }}));
+                chrome.runtime.onMessage.addListener(
+                    function (request, sender, sendResponse) {
+                        sendResponse({ ui5TestingRegistered: true });
+                        if (request.startForControl) {
+                            if (oLastDom) {
+                                document.dispatchEvent(new CustomEvent('do-ui5-start', { detail: { domId: oLastDom.id } }));
+                                return;
+                            }
+                        } else if (request.checkRegistration) {
+                            sendResponse(true);
+                            return;
+                        } else if (request.showCode) {
+                            document.dispatchEvent(new CustomEvent('do-show-code'));
                             return;
                         }
-                    } else if (request.checkRegistration) {
-                        sendResponse(true);
-                        return;
-                    } else if (request.showCode) {
-                        document.dispatchEvent(new CustomEvent('do-show-code'));
-                        return;
-                    }
-                    document.dispatchEvent(new CustomEvent('do-ui5-switch'));
-                });
+                        document.dispatchEvent(new CustomEvent('do-ui5-switch'));
+                    });
+            });
         }());
 
     }, {}]

@@ -36,15 +36,40 @@ var registerScript = function (id) {
 
 	if (bRegisterContextMenu === true) {
 		chrome.contextMenus.create({
-			title: "Add to UI5 Testing",
-			contexts: ["all"],
+			title: "Add Control to Test",
+			contexts: ["page", "frame","selection", "page_action"],
 			onclick: startForControl
 		});
 		chrome.contextMenus.create({
-			title: "Show current code",
-			contexts: ["all"],
+			title: "Current Test",
+			contexts: ["browser_action"],
+			onclick: showCode
+		});
+		chrome.contextMenus.create({
+			parentId: "testManagement",
+			title: "Export Test",
+			contexts: ["browser_action"],
 			onclick: showCode
 		});
 		bRegisterContextMenu = false;
 	}
 };
+
+chrome.contextMenus.create({
+	id: "testManagement",
+	title: "Test-Management",
+	contexts: ["browser_action"]
+});
+
+chrome.contextMenus.create({
+	parentId: "testManagement",
+	title: "Import Test",
+	contexts: ["browser_action"],
+	onclick: showCode
+});
+
+chrome.contextMenus.create({
+	title: "Import Test",
+	contexts: ["launcher"],
+	onclick: showCode
+});
