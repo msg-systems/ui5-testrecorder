@@ -13,3 +13,7 @@
 .HVRReveal {
   background-color:Yellow!important;
 }
+
+.HVRIncreaseZIndex {
+  z-index: 999;
+};
