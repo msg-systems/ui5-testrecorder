@@ -1578,20 +1578,16 @@ else {
             if (oMerged.cloned === true) {
                 bSufficientForStop = false;
             }
-            if (this._getFoundElements().length === 1 && bSufficientForStop === true) { //early exit if possible - the less attributes the better..
-                return;
-            }
 
             //(4): now let's go for element specific attributes
-            var aFound = [];
             if (oMerged.defaultAttributes && oMerged.defaultAttributes.length > 0) {
                 //add the elements from default attributes and stop.
                 for (var i = 0; i < oMerged.defaultAttributes.length; i++) {
                     this._add("/element/attributeFilter", oMerged.defaultAttributes[i]);
-                    if (this._getFoundElements().length === 1) { //early exit if possible - the less attributes the better..
-                        return;
-                    }
                 }
+            }
+            if (this._getFoundElements().length === 1) { //early exit if possible - the less attributes the better..
+                return;
             }
 
             //(5): now add the label text if possible and static..
