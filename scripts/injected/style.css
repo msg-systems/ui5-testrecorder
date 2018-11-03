@@ -15,11 +15,10 @@
   border-style: solid!important;
   border-color:red!important;
   border-width: thin;
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
 }
-
-.HVRIncreaseZIndex {
-  z-index: 999;
-};
 
 .HVRPlayStopOverlay {
     position: fixed;

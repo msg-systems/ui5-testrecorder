@@ -59,19 +59,25 @@ else {
                         actKey: "PRS",
                         type: "ACT",
                         selectItemBy: "UI5",
-                        previewCode: ""
+                        previewCode: "",
+                        supportAssistant: {
+                            ignoreGlobal: false,
+                            supportRules: []
+                        }
                     },
                     identifiedElements: [], //elements which are fitting to the current selector
                     item: {},
                     attributeFilter: [],
                     assertFilter: [],
-                    subActionTypes: []
+                    subActionTypes: [],
+                    supportAssistantResult: []
                 },
                 codeSettings: {
                     language: "TCF",
                     testName: document.title,
                     testCategory: document.title,
-                    testUrl: window.location.href
+                    testUrl: window.location.href,
+                    supportAssistant: false
                 },
                 dynamic: {
                     attrType: []
@@ -95,9 +101,11 @@ else {
                     }
                 ],
                 statics: {
+                    supportRules: [],
                     type: [
                         { key: "ACT", text: "Action" },
                         { key: "ASS", text: "Assert" },
+                        { key: "SUP", text: "Support Assistant" }
                     ],
                     action: [
                         { key: "PRS", text: "Press" },
@@ -288,12 +296,15 @@ else {
             var oReturn = {
                 property: oElement.property,
                 item: {
-                    identifier: oElement.item.identifier
+                    identifier: oElement.item.identifier,
+                    metadata: oElement.item.metadata
                 },
                 attributeFilter: oElement.attributeFilter,
                 assertFilter: oElement.assertFilter,
                 selector: this._getSelectorDefinition(oElement),
-                assertion: this._getAssertDefinition(oElement)
+                assertion: this._getAssertDefinition(oElement),
+                href: window.location.href,
+                hash: window.location.hash
             };
 
             return JSON.parse(JSON.stringify(oReturn));
@@ -304,22 +315,22 @@ else {
                 this.showCode();
             }.bind(this));
         };
-        
-        TestHandler.prototype._onCloseAndRestart = function() {
+
+        TestHandler.prototype._onCloseAndRestart = function () {
             this._oDialog.close();
             this._oModel.setProperty("/elements", []);
             this._start();
         };
 
         TestHandler.prototype._onSave = function () {
-            this._save(function() {
+            this._save(function () {
                 if (this._bStarted === true) {
                     this._start();
                 }
             }.bind(this));
         };
 
-        TestHandler.prototype._save = function(fnCallback) {
+        TestHandler.prototype._save = function (fnCallback) {
             this._checkAndDisplay(function () {
                 this._oDialog.close();
 
@@ -401,16 +412,8 @@ else {
                 e.which = 13; // Enter
                 oDom.val(this._oModel.getProperty("/element/property/selectActInsert"));
 
-                var event = new KeyboardEvent('keydown', {
-                    view: window,
-                    keyCode: 13,
-                    key: "Enter",
-                    bubbles: true,
-                    cancelable: true
-                });
-                event.originalEvent = event;
-                oDom.get(0).dispatchEvent(event);
-                /*
+                //first simulate a dummy input (NO! ENTER! - that is different)
+                //this will e.g. trigger the liveChange evnts
                 var event = new KeyboardEvent('input', {
                     view: window,
                     data: '',
@@ -418,7 +421,16 @@ else {
                     cancelable: true
                 });
                 event.originalEvent = event;
-                oDom.get(0).dispatchEvent(event);*/
+                oDom.get(0).dispatchEvent(event);
+
+                //afterwards trigger the blur event, in order to trigger the change event
+                var event = new MouseEvent('blur', {
+                    view: window,
+                    bubbles: true,
+                    cancelable: true
+                });
+                event.originalEvent = event;
+                oDom.get(0).dispatchEvent(event);
             }
         };
 
@@ -535,6 +547,7 @@ else {
 
         TestHandler.prototype._testCafeGetCode = function (aElements) {
             var aCodes = [];
+            var bSupportAssistant = this._oModel.getProperty("/codeSettings/supportAssistant");
 
             //for testcafe we are returning: (1) installation instructions..
             var oCodeInstall = {
@@ -543,12 +556,12 @@ else {
                 order: 2,
                 code: "<h3>Installation</h3>" +
                     "<p>Execute the following command-line paramters:</p>" +
-                    "<code>npm install testcafe, testcafe-reporter-xunit, ui5-testcafe-selector --save-dev</code>" +
+                    "<code>npm install testcafe testcafe-reporter-xunit ui5-testcafe-selector --save-dev</code>" +
                     "<p>This will install all relevant packages for the test-automation runner.</p>" +
                     "<h3>Test-Configuration</h3>" +
-                    "<p>Write a new testfile and copy/paste the code.</p>" +
+                    "<p>Write a new testfile and copy/paste the code. The file can both be a typescript or a javascript file.</p>" +
                     "<h3>Running</h3>" +
-                    "<p>Run via Command-Line via: <code>testcafe chrome your_test_file.js</code><br/>" +
+                    "<p>Run via Command-Line via: <code>testcafe chrome your_test_file.js/ts</code><br/>" +
                     "Run via Grunt using <a href=\"https://www.npmjs.com/package/grunt-testcafe\" style=\"color:green; font-weight:600;\">grunt-testcafe</a></p>"
             }
             aCodes.push(oCodeInstall);
@@ -561,14 +574,42 @@ else {
             };
             var sCode = "";
             var oCodeSettings = this._oModel.getProperty("/codeSettings");
+            var bSupportAssistantNeeded = bSupportAssistant;
+            for (var i = 0; i < aElements.length; i++) {
+                if (aElements[i].property.type === "SUP") {
+                    bSupportAssistantNeeded = true;
+                    break;
+                }
+            }
 
-            sCode = 'import { UI5Selector } from "ui5-testcafe-selector";\n';
+            sCode = 'import { UI5Selector ' + (bSupportAssistantNeeded ? ", utils " : "") + '} from "ui5-testcafe-selector";\n';
             sCode += "fixture('" + oCodeSettings.testCategory + "')\n";
             sCode += "  .page('" + oCodeSettings.testUrl + "');\n";
             sCode += "\n";
             sCode += "test('" + oCodeSettings.testName + "', async t => {\n";
+            var sCurrentHash = null;
+            var bVariableInitialized = false;
+            var bHashChanged = true;
             for (var i = 0; i < aElements.length; i++) {
-                var aLines = this._getCodeFromItem(aElements[i]);
+                var aLines = [];
+                if (aElements[i].property.type !== "SUP") {
+                    aLines = this._getCodeFromItem(aElements[i]);
+                }
+
+                if (sCurrentHash === null || sCurrentHash !== aElements[i].hash) {
+                    if (sCurrentHash !== null) {
+                        sCode = sCode + "\n  //new route:" + aElements[i].hash + "\n";
+                    }
+                    sCurrentHash = aElements[i].hash;
+                    bHashChanged = true;
+                }
+
+                if ((bHashChanged === true && bSupportAssistant) || aElements[i].property.type === "SUP") {
+                    sCode += "  " + (bVariableInitialized === false ? "var " : "") + "oSupportAssistantResult = await utils.supportAssistant(t, '" + aElements[i].item.metadata.componentName + "' );\n";
+                    sCode += "  " + "await t.expect(oSupportAssistantResult.High.length).eql(0);\n";
+                    bVariableInitialized = true;
+                }
+
                 for (var j = 0; j < aLines.length; j++) {
                     sCode += "  " + aLines[j] + "\n";
                 }
@@ -593,7 +634,7 @@ else {
             this._oModel.setProperty("/element/identifiedElements", aElements);
             if (aElements.length !== 1) {
                 //we are only expanding, in case we are in ACTION mode - reason: the user has to do sth. in case we are in action mode, as only one can be selected..
-                if (this._oModel.getProperty("/element/property/type") !== 'ASS') {
+                if (this._oModel.getProperty("/element/property/type") === 'ACT') {
                     sap.ui.core.Fragment.byId("testDialog", "atrElementsPnl").setExpanded(true);
                 }
             }
@@ -874,6 +915,112 @@ else {
             return "{ " + this._getSelectorToJSONStringRec(oObject) + " }";
         };
 
+        TestHandler.prototype.onRunSupportAssistant = function () {
+            this._runSupportAssistantForSelElement();
+        };
+
+        TestHandler.prototype._runSupportAssistantForSelElement = function () {
+            var oItem = this._oModel.getProperty("/element/item");
+            var sComp = _getOwnerComponent(oItem.control);
+            if (!sComp) {
+                return;
+            }
+
+            this._runSupportAssistant(sComp);
+        };
+
+        TestHandler.prototype._runSupportAssistant = function (sComponent) {
+            var oSupSettings = this._oModel.getProperty("/element/property/supportAssistant");
+            this._oDialog.setBusy(true);
+            sap.ui.require(["sap/ui/support/Bootstrap"], function (Bootstrap) {
+                Bootstrap.initSupportRules(["silent"]);
+                //librarys is an array of libName & ruleId
+                /* libName: "sap.ui.core"
+                    ruleId: "asynchronousXMLViews" */
+                var aExclude = oSupSettings.supportRules;
+                var aListAll = this._oModel.getProperty("/statics/supportRules");
+                for (var i = 0; i < aExclude.length; i++) {
+                    var sLib = aExclude[i].split("/")[0];
+                    var sRuleId = aExclude[i].split("/")[1];
+                    for (var j = 0; j < aListAll.length; j++) {
+                        if (aListAll[j].libName === sLib &&
+                            aListAll[j].ruleId === sRuleId) {
+                            aListAll = aListAll.splice(j, 1);
+                            break;
+                        }
+                    }
+                }
+                setTimeout(function () {
+                    jQuery.sap.support.analyze({
+                        type: "components",
+                        components: [sComponent]
+                    }, aListAll.length > 0 ? aListAll : undefined).then(function () {
+                        this._oDialog.setBusy(false);
+                        var aIssues = jQuery.sap.support.getLastAnalysisHistory();
+                        var aStoreIssue = [];
+                        for (var i = 0; i < aIssues.issues.length; i++) {
+                            var oIssue = aIssues.issues[i];
+                            if (oSupSettings.ignoreGlobal === true && oIssue.context.id === "WEBPAGE") {
+                                continue;
+                            }
+                            var sState = "Error";
+                            var iPrio = 3;
+                            if (oIssue.severity === "Medium") {
+                                sState = "Warning";
+                                iPrio = 2;
+                            } else if (oIssue.severity === "Low") {
+                                sState = "None";
+                                iPrio = 1;
+                            }
+                            aStoreIssue.push({
+                                severity: oIssue.severity,
+                                details: oIssue.details,
+                                context: oIssue.context.id,
+                                rule: oIssue.rule.id,
+                                ruleText: oIssue.rule.description,
+                                state: sState,
+                                importance: iPrio
+                            });
+                        }
+
+                        aStoreIssue = aStoreIssue.sort(function (aObj, bObj) {
+                            if (aObj.importance <= bObj.importance) {
+                                return 1;
+                            }
+                            return -1;
+                        });
+
+                        this._oModel.setProperty("/element/supportAssistantResult", aStoreIssue);
+                        this._oModel.setProperty("/element/supportAssistantResultLength", aStoreIssue.length);
+
+                        if (this._oModel.getProperty("/statics/supportRules").length === 0) {
+                            var oLoader = sap.ui.require("sap/ui/support/supportRules/RuleSetLoader");
+                            var aRules = [];
+                            if (oLoader) { //only as of 1.52.. so ignore that for the moment
+                                aRules = oLoader.getAllRuleDescriptors();
+                            } else {
+                                //check is dumb and internal - du not take over..
+                                /*
+                                oLoader = sap.ui.require("sap/ui/support/supportRules/Main");
+                                if (oLoader && oLoader._mRuleSets ) {
+                                    for (var sRuleId in oLoader._mRuleSets ) {
+                                        for ( var s )
+                                        aRules.push({
+                                            libName: oLoader._mRuleSets[sRuleId].libName,
+                                            ruleId: sRuleId
+                                        });
+                                    }
+                                }*/
+                            }
+                            this._oModel.setProperty("/statics/supportRules", aRules);
+                        }
+
+                        this._updatePreview();
+                    }.bind(this));
+                }.bind(this), 0);
+            }.bind(this));
+        };
+
         TestHandler.prototype._getSelectorDefinition = function (oElement) {
             var oScope = {};
             var sSelector = "";
@@ -1043,6 +1190,13 @@ else {
         TestHandler.prototype.onTypeChange = function () {
             sap.ui.core.Fragment.byId("testDialog", "atrElementsPnl").setExpanded(false);
             this._adjustAttributeDefaultSetting(this._oModel.getProperty("/element/item"));
+
+            //if we are within support assistant mode, run it at least once..
+            if (this._oModel.getProperty("/element/property/type") === "SUP") {
+                this._runSupportAssistantForSelElement();
+            }
+
+            //update preview
             this._updatePreview();
         };
 
@@ -1711,7 +1865,7 @@ else {
                 this._oDialog.setInitialFocus(oInput);
             } else {
                 //if rating = 5 --> save
-                if (this._oModel.getProperty("/element/ratingOfAttributes") === 5 ) {
+                if (this._oModel.getProperty("/element/ratingOfAttributes") === 5) {
                     this._oDialog.setInitialFocus(oConfirm);
                 }
             }
@@ -1873,6 +2027,9 @@ else {
         TestHandler.prototype._updateCriteriaType = function (oCtx) {
             var oAttribute = this._oModel.getProperty(oCtx.getPath());
             var oItem = this._attributeTypes[oAttribute.attributeType].getItem(this._oModel.getProperty("/element/item"));
+            if (oItem === null) {
+                return;
+            }
             var aSubCriteriaSettings = this._criteriaTypes[oAttribute.criteriaType].criteriaSpec(oItem);
 
             oAttribute.subCriteriaTypes = aSubCriteriaSettings;
@@ -1886,7 +2043,7 @@ else {
             //update the value for every single sub critriay type..
             for (var i = 0; i < oAttribute.subCriteriaTypes.length; i++) {
                 var sStringTrimmed = oAttribute.subCriteriaTypes[i].value(oItem);
-                if ( sStringTrimmed === null || typeof sStringTrimmed === "undefined" ) {
+                if (sStringTrimmed === null || typeof sStringTrimmed === "undefined") {
                     continue;
                 }
                 if (typeof sStringTrimmed !== "string") {
@@ -2057,6 +2214,24 @@ else {
                         subtitle: "At least one assert is failing",
                         description: "At least one of the maintained assert attribute checks is failing. This also wont work within the actual test run later on. Please fix that."
                     });
+                }
+            }
+
+            if (sType === "SUP") {
+                //check if there are any critical issues (maybe in future also, for certain issues or contexts.. let's see)
+                var aIssues = this._oModel.getProperty("/element/supportAssistantResult");
+                for (var j = 0; j < aIssues.length; j++) {
+                    if (aIssues[j].severity === "High") {
+                        iGrade = 1;
+                        sap.ui.core.Fragment.byId("testDialog", "pnlSupAssistantRule").setExpanded(true);
+                        aMessages.push({
+                            type: "Error",
+                            title: "Support Assistants is failing",
+                            subtitle: "At least one rule is failing",
+                            description: "At least one of the maintained rules is failing - Adding this step doesn't make sense, as anyways it will fail."
+                        });
+                        break;
+                    }
                 }
             }
 
@@ -2416,6 +2591,9 @@ else {
             this._oElementMix = {
                 "sap.m.StandardListItem": {
                     defaultAttributes: function (oItem) {
+                        if (!oItem.itemdata.control) {
+                            return [];
+                        }
                         return [{ attributeType: "MCMB", criteriaType: "ATTR", subCriteriaType: "key" }];
                     }
                 },
@@ -2866,6 +3044,7 @@ else {
 
         if (id.model) {
             for (var sModel in id.model) {
+                sModel = sModel === "undefined" ? undefined : sModel;
                 if (!oItem.getModel(sModel)) {
                     return false;
                 }
@@ -3109,6 +3288,7 @@ else {
             var oType = _oElementModelValues[oMetadata._sClassName];
             if (oType) {
                 for (var sModel in oType) {
+                    sModel = sModel === "undefined" ? undefined : sModel;
                     oReturn.model[sModel] = {};
                     var oCurrentModel = oItem.getModel(sModel);
                     if (!oCurrentModel) {
