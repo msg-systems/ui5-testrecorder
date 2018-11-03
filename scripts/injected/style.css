@@ -12,8 +12,24 @@
 
 .HVRReveal {
   background-color:Yellow!important;
+  border-style: solid!important;
+  border-color:red!important;
+  border-width: thin;
 }
 
 .HVRIncreaseZIndex {
   z-index: 999;
+};
+
+.HVRPlayStopOverlay {
+    position: fixed;
+    top: 50%;
+    left: 5;
+    width: 25px;
+    height: 25px;
+    filter: alpha(opacity=100);
+    -moz-opacity: 1.0;
+    -khtml-opacity: 1.0;
+    opacity: 1.0;
+    z-index: 10000;
 };

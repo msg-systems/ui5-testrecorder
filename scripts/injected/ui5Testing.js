@@ -48,6 +48,7 @@ else {
                     messages: []
                 },
                 elements: [],
+                elementLength: 0,
                 elementDefault: {
                     property: {
                         assKeyMatchingCount: 1,
@@ -68,13 +69,31 @@ else {
                 },
                 codeSettings: {
                     language: "TCF",
-                    testName: "",
-                    testCategory: "",
+                    testName: document.title,
+                    testCategory: document.title,
                     testUrl: window.location.href
                 },
                 dynamic: {
                     attrType: []
                 },
+                codeLanguages: [
+                    {
+                        key: "TCF",
+                        text: "Testcafe"
+                    },
+                    {
+                        key: "NGT",
+                        text: "Nightwatch"
+                    },
+                    {
+                        key: "PTC",
+                        text: "Protractor"
+                    },
+                    {
+                        key: "OPA",
+                        text: "OPA5"
+                    }
+                ],
                 statics: {
                     type: [
                         { key: "ACT", text: "Action" },
@@ -112,7 +131,7 @@ else {
                         { key: "NP", text: "Not Contains" }
                     ]
                 },
-                selectMode: true,
+                selectMode: true, //are we within selection or within code check
                 completeCode: "",
                 completeCodeSaved: "",
                 ratingOfAttributes: 3,
@@ -261,6 +280,7 @@ else {
 
         TestHandler.prototype._onClose = function () {
             this._oDialog.close();
+            this._start();
         };
 
         TestHandler.prototype._adjustBeforeSaving = function (oElement) {
@@ -279,7 +299,27 @@ else {
             return JSON.parse(JSON.stringify(oReturn));
         };
 
+        TestHandler.prototype._onSaveAndFinish = function () {
+            this._save(function () {
+                this.showCode();
+            }.bind(this));
+        };
+        
+        TestHandler.prototype._onCloseAndRestart = function() {
+            this._oDialog.close();
+            this._oModel.setProperty("/elements", []);
+            this._start();
+        };
+
         TestHandler.prototype._onSave = function () {
+            this._save(function() {
+                if (this._bStarted === true) {
+                    this._start();
+                }
+            }.bind(this));
+        };
+
+        TestHandler.prototype._save = function(fnCallback) {
             this._checkAndDisplay(function () {
                 this._oDialog.close();
 
@@ -289,10 +329,9 @@ else {
                 this._oModel.setProperty("/elements", aElements);
 
                 this._oModel.setProperty("/codes", this._testCafeGetCode(this._oModel.getProperty("/elements")));
+                this._oModel.setProperty("/elementLength", aElements.length);
                 this._executeAction(this._oModel.getProperty("/element"));
-                if (this._bStarted === true) {
-                    this._start();
-                }
+                fnCallback();
             }.bind(this));
         };
 
@@ -361,8 +400,17 @@ else {
                 var e = jQuery.Event("keypress");
                 e.which = 13; // Enter
                 oDom.val(this._oModel.getProperty("/element/property/selectActInsert"));
-                oDom.trigger(e);
 
+                var event = new KeyboardEvent('keydown', {
+                    view: window,
+                    keyCode: 13,
+                    key: "Enter",
+                    bubbles: true,
+                    cancelable: true
+                });
+                event.originalEvent = event;
+                oDom.get(0).dispatchEvent(event);
+                /*
                 var event = new KeyboardEvent('input', {
                     view: window,
                     data: '',
@@ -370,7 +418,7 @@ else {
                     cancelable: true
                 });
                 event.originalEvent = event;
-                oDom.get(0).dispatchEvent(event);
+                oDom.get(0).dispatchEvent(event);*/
             }
         };
 
@@ -1646,8 +1694,6 @@ else {
             sap.ui.core.Fragment.byId("testDialog", "atrElementsPnl").setExpanded(false);
             this._bShowCodeOnly = false;
             this._resetCache();
-
-            sap.ui.core.Fragment.byId("testDialog", "idIconTabBarNoIcons").setSelectedKey("01");
             this._oDialog.open();
 
             //in case we are actually a "local-id", and we do NOT have "sParentAggregationName" set, and our parent is undefined
@@ -1663,11 +1709,15 @@ else {
             this._setItem(oControl, oDomNode, oOriginalDomNode);
 
             //in case we are in "TYP" after opening, set focus to input field..
+            var oInput = sap.ui.core.Fragment.byId("testDialog", "inpTypeText");
+            var oConfirm = sap.ui.core.Fragment.byId("testDialog", "btSave");
             if (this._oModel.getProperty("/element/property/actKey") === "TYP") {
-                var oInput = sap.ui.core.Fragment.byId("testDialog", "inpTypeText");
-                setTimeout(function () {
-                    oInput.focus();
-                }, 500);
+                this._oDialog.setInitialFocus(oInput);
+            } else {
+                //if rating = 5 --> save
+                if (this._oModel.getProperty("/element/ratingOfAttributes") === 5 ) {
+                    this._oDialog.setInitialFocus(oConfirm);
+                }
             }
         };
 
@@ -1707,11 +1757,12 @@ else {
 
         TestHandler.prototype.showCode = function (sId) {
             this._bActive = false;
-            this._bShowCodeOnly = false;
+            this._bShowCodeOnly = true;
             this._oModel.setProperty("/selectMode", false);
-            this._oModel.setProperty("/element/property/previewCode", this._oModel.getProperty("/completeCodeSaved"));
             this._createDialog();
             this._oDialog.open();
+            this._updatePreview();
+            $(".HVRReveal").removeClass('HVRReveal');
         };
 
         TestHandler.prototype.startFor = function (sId) {
@@ -1727,6 +1778,12 @@ else {
             this._sXMLPage = sXMLPage;
             $(document).ready(function () {
                 var that = this;
+
+                //create our global overlay..
+                /*
+                this._oGlobalOverlay = jQuery('<div id="tstUI5Overlay" class="HVRPlayStopOverlay"> </div>');
+                this._oGlobalOverlay.appendTo(document.body);
+                this._initGlobalOverlay();*/
 
                 $(document).on("keydown", function (e) {
                     if (e.ctrlKey && e.altKey && e.shiftKey && e.which == 84) {
@@ -1833,6 +1890,9 @@ else {
             //update the value for every single sub critriay type..
             for (var i = 0; i < oAttribute.subCriteriaTypes.length; i++) {
                 var sStringTrimmed = oAttribute.subCriteriaTypes[i].value(oItem);
+                if ( sStringTrimmed === null || typeof sStringTrimmed === "undefined" ) {
+                    continue;
+                }
                 if (typeof sStringTrimmed !== "string") {
                     if (!sStringTrimmed.toString) {
                         continue;
@@ -2596,6 +2656,7 @@ else {
                 parentL2: {},
                 parentL3: {},
                 parentL4: {},
+                itemdata: {},
                 label: {},
                 parents: [],
                 control: null,
@@ -2623,6 +2684,7 @@ else {
             oReturn.parentL3 = fnGetElementInformation(_getParentWithDom(oItem, 3), bFull);
             oReturn.parentL4 = fnGetElementInformation(_getParentWithDom(oItem, 4), bFull);
             oReturn.label = fnGetElementInformation(_getLabelForItem(oItem), bFull);
+            oReturn.itemdata = fnGetElementInformation(_getItemForItem(oItem), bFull);
 
             oTestGlobalBuffer["fnGetElementInfo"][bFull][oItem.getId()] = oReturn;
 
@@ -2676,7 +2738,7 @@ else {
                 }
             }
         }
-    }
+    };
 
     //on purpose implemented as local methods
     //this is not readable, but is a easy approach to transform those methods to the UI5Selector Stack (one single method approach)
