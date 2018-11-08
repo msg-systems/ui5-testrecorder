@@ -1,7 +1,7 @@
 var TestHandlerSingleton = null;
 
 document.addEventListener('do-ui5-send-xml-view', function (oXMLEvent) {
-    TestHandlerSingleton.init(oXMLEvent.detail);
+    TestHandlerSingleton.init(oXMLEvent.detail.popover, oXMLEvent.detail.settings);
 });
 document.addEventListener('do-ui5-switch', function (oXMLEvent) {
     TestHandlerSingleton.switch();
@@ -39,6 +39,8 @@ else {
 
         var TestHandler = Object.extend("com.tru.TestHandler", {
             _oDialog: null,
+            _oPopoverAction: null,
+            _bDialogActive: false,
             _oModel: new JSONModel({
                 element: {
                     property: {}, //properties
@@ -60,6 +62,12 @@ else {
                         type: "ACT",
                         selectItemBy: "UI5",
                         previewCode: "",
+                        actionSettings: {
+                            testSpeed: 1,
+                            replaceText: false,
+                            pasteText: false,
+                            blur: false
+                        },
                         supportAssistant: {
                             ignoreGlobal: false,
                             supportRules: []
@@ -156,6 +164,11 @@ else {
                 this._initMessagePopover();
             }
         });
+
+        TestHandler.prototype.onShowActionSettings = function (oEvent) {
+            this._createActionPopover();
+            this._oPopoverAction.openBy(oEvent.getSource());
+        };
 
         TestHandler.prototype._initMessagePopover = function () {
             var oMessageTemplate = new MessageItem({
@@ -291,12 +304,18 @@ else {
             this._start();
         };
 
+        TestHandler.prototype._onCloseAndStop = function () {
+            this._stop();
+            this._oDialog.close();
+        };
+
         TestHandler.prototype._adjustBeforeSaving = function (oElement) {
             //what we are actually saving, is an extremly reduced form, of everything we need for code generation
             var oReturn = {
                 property: oElement.property,
                 item: {
                     identifier: oElement.item.identifier,
+                    viewProperty: oElement.item.viewProperty,
                     metadata: oElement.item.metadata
                 },
                 attributeFilter: oElement.attributeFilter,
@@ -312,7 +331,9 @@ else {
 
         TestHandler.prototype._onSaveAndFinish = function () {
             this._save(function () {
-                this.showCode();
+                setTimeout(function () {
+                    this.showCode(); //wait for navigation to be triggered in case there is any, would be better to attach to an navigation handler
+                }.bind(this), 500);
             }.bind(this));
         };
 
@@ -410,7 +431,12 @@ else {
             } else if (sActType === "TYP") {
                 var e = jQuery.Event("keypress");
                 e.which = 13; // Enter
-                oDom.val(this._oModel.getProperty("/element/property/selectActInsert"));
+                var sText = this._oModel.getProperty("/element/property/selectActInsert");
+                if (sText.length > 0 && this._oModel.getProperty("/element/property/actionSettings/replaceText") === false) {
+                    oDom.val(oDom.val() + sText);
+                } else {
+                    oDom.val(sText);
+                }
 
                 //first simulate a dummy input (NO! ENTER! - that is different)
                 //this will e.g. trigger the liveChange evnts
@@ -424,13 +450,15 @@ else {
                 oDom.get(0).dispatchEvent(event);
 
                 //afterwards trigger the blur event, in order to trigger the change event
-                var event = new MouseEvent('blur', {
-                    view: window,
-                    bubbles: true,
-                    cancelable: true
-                });
-                event.originalEvent = event;
-                oDom.get(0).dispatchEvent(event);
+                if (this._oModel.getProperty("/element/property/actionSettings/blur") === true) {
+                    var event = new MouseEvent('blur', {
+                        view: window,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    event.originalEvent = event;
+                    oDom.get(0).dispatchEvent(event);
+                }
             }
         };
 
@@ -575,14 +603,20 @@ else {
             var sCode = "";
             var oCodeSettings = this._oModel.getProperty("/codeSettings");
             var bSupportAssistantNeeded = bSupportAssistant;
+            var bSelectorNeeded = false;
             for (var i = 0; i < aElements.length; i++) {
                 if (aElements[i].property.type === "SUP") {
                     bSupportAssistantNeeded = true;
-                    break;
+                }
+                if (aElements[i].property.actionSettings.blur === true) {
+                    bSelectorNeeded = true;
                 }
             }
 
             sCode = 'import { UI5Selector ' + (bSupportAssistantNeeded ? ", utils " : "") + '} from "ui5-testcafe-selector";\n';
+            if (bSelectorNeeded === true) {
+                sCode += 'import { Selector } from "testcafe";\n';
+            }
             sCode += "fixture('" + oCodeSettings.testCategory + "')\n";
             sCode += "  .page('" + oCodeSettings.testUrl + "');\n";
             sCode += "\n";
@@ -620,6 +654,73 @@ else {
             return aCodes;
         };
 
+
+        TestHandler.prototype._opaGetCode = function (aElements) {
+            var aCodes = [];
+            var bSupportAssistant = this._oModel.getProperty("/codeSettings/supportAssistant");
+
+            //for testcafe we are returning: (1) installation instructions..
+            var oCodeInstall = {
+                codeName: "Usage",
+                type: "FTXT",
+                order: 2,
+                code: "<h3>t.b.d.</h3>"
+            }
+            aCodes.push(oCodeInstall);
+
+            //(2) execute script
+            var oCodeTest = {
+                codeName: "Test",
+                type: "CODE",
+                order: 1
+            };
+            var sCode = "";
+            var oCodeSettings = this._oModel.getProperty("/codeSettings");
+
+            sCode = 'sap.ui.define([;\n';
+            sCode += '    "sap/ui/test/opaQunit"\n';
+            sCode += '], function (opaTest) {\n';
+            sCode += '    "use strict";\n\n';
+            sCode += '    QUnit.module("' + oCodeSettings.testCategory + '");\n\n';
+
+            //group elements by assertions (Given, When, Then)
+            var aCluster = [[]];
+            var bNextIsBreak = false;
+            for (var i = 0; i < aElements.length; i++) {
+                if (bNextIsBreak === true) {
+                    aCluster.push([]);
+                    bNextIsBreak = false;
+                }
+                if (i < aElements.length - 1 && aElements[i].property.type === "ASS" && aElements[i + 1].property.type === "ACT") {
+                    bNextIsBreak = true;
+                }
+                aCluster[aCluster.length - 1].push(aElements[i]);
+            }
+
+            for (var i = 0; i < aCluster.length; i++) {
+                var aLines = [];
+                sCode += "    opaTest('Test " + i + "', function (Given, When, Then) {\n";
+                for (var j = 0; j < aCluster[i].length; j++) {
+                    var oElement = aCluster[i][j];
+
+                    if (oElement.property.type !== "SUP") {
+                        aLines = this._getOPACodeFromItem(oElement);
+                    }
+
+                    for (var x = 0; x < aLines.length; x++) {
+                        sCode += "        " + aLines[x] + "\n";
+                    }
+                }
+
+                sCode += "    });\n";
+            }
+
+            sCode += "});";
+            oCodeTest.code = sCode;
+            aCodes.push(oCodeTest);
+            return aCodes;
+        };
+
         TestHandler.prototype._updatePreview = function () {
             var oItem = this._oModel.getProperty("/element");
             oItem = this._adjustBeforeSaving(oItem);
@@ -629,7 +730,14 @@ else {
             } else {
                 aStoredItems = this._oModel.getProperty("/elements");
             }
-            this._oModel.setProperty("/codes", this._testCafeGetCode(aStoredItems));
+
+            var sCodeLanguage = this._oModel.getProperty("/codeSettings/language");
+            if (sCodeLanguage === "OPA") {
+                this._oModel.setProperty("/codes", this._opaGetCode(aStoredItems));
+            } else {
+                //testcafe by default
+                this._oModel.setProperty("/codes", this._testCafeGetCode(aStoredItems));
+            }
             var aElements = this._getFoundElements(0);
             this._oModel.setProperty("/element/identifiedElements", aElements);
             if (aElements.length !== 1) {
@@ -786,6 +894,7 @@ else {
             var sAssertMsg = oElement.property.assertMessage;
             var aCode = [];
             var sAssertCount = oElement.property.assKeyMatchingCount;
+            var aReturnCodeSimple = [];
 
             if (sAssertType === 'ATTR') {
                 sBasisCode += ".getUI5(" + "({ element }) => element.";
@@ -810,8 +919,18 @@ else {
                         sAssertFunc = 'notContains'
                     }
 
+
+
                     var sAddCode = sBasisCode;
-                    sAddCode += oAssertSpec.assert();
+                    var sAssertCode = oAssertSpec.assert();
+                    sAddCode += sAssertCode;
+
+                    aReturnCodeSimple.push({
+                        assertType: oAssert.operatorType,
+                        assertLocation: sAssertCode,
+                        assertValue: oAssert.criteriaValue
+                    });
+
                     sAddCode += "))" + "." + sAssertFunc + "(" + "'" + oAssert.criteriaValue + "'";
                     if (sAssertMsg !== "") {
                         sAddCode += "," + '"' + sAssertMsg + '"';
@@ -837,6 +956,10 @@ else {
 
             return {
                 code: aCode,
+                assertType: sAssertType,
+                assertMsg: sAssertMsg,
+                assertCode: aReturnCodeSimple,
+                assertMatchingCount: sAssertCount,
                 assertScope: oAssertLocalScope
             }
         };
@@ -950,6 +1073,7 @@ else {
                         }
                     }
                 }
+
                 setTimeout(function () {
                     jQuery.sap.support.analyze({
                         type: "components",
@@ -1075,6 +1199,76 @@ else {
             };
         };
 
+        TestHandler.prototype._getOPACodeFromItem = function (oElement) {
+            var sCode = "";
+            var aCode = [];
+
+            var oSelector = oElement.selector;
+            var sType = oElement.property.type; // SEL | ACT | ASS
+            var sActType = oElement.property.actKey; //PRS|TYP
+
+            //(1) first: build up the actual selector
+            var sSelectorAttributes = "";
+
+            sSelectorAttributes = oSelector.selectorAttributesStringified;
+            var sSelectorFinal = sSelectorAttributes;
+            if (!oElement.item.viewProperty.localViewName) {
+                oElement.item.viewProperty.localViewName = "Unknown";
+            }
+            var sCurrentPage = oElement.item.viewProperty.localViewName;
+            sCurrentPage = "onThe" + sCurrentPage + "Page";
+
+            var sAction = "";
+            if (sType === 'ACT') {
+                sCode = "When." + sCurrentPage + ".";
+                switch (sActType) {
+                    case "PRS":
+                        sAction = "iPressElement";
+                        break;
+                    case "TYP":
+                        sAction = "iEnterText";
+                        break;
+                    default:
+                        return "";
+                }
+
+                sCode = sCode + sAction + "(" + sSelectorFinal;
+                if (sActType == "TYP") {
+                    sCode = sCode + ',"' + oElement.property.selectActInsert + '"';
+                }
+                sCode = sCode + ");";
+                aCode = [sCode];
+            } else if (sType === 'ASS') {
+                if (oElement.assertion.assertType === "ATTR" ) {
+                    for (var i = 0; i < oElement.assertion.assertCode.length; i++) {
+                        var oAss = oElement.assertion.assertCode[i];
+
+                        // we could make 100 of mock methods here to make that more OPA style.. but...ya..
+                        sCode = "Then." + sCurrentPage + ".theExpactationIs(" + sSelectorFinal + ",'" + oAss.assertLocation + "','" + oAss.assertType + "',";
+                        
+                        if (typeof oAss.assertValue === "boolean") {
+                            sCode += oAss.assertValue;
+                        } else if (typeof oAss.assertValue === "number") {
+                            sCode += oAss.assertValue;
+                        } else {
+                            sCode += '"' + oAss.assertValue + '"';
+                        }
+                        sCode += ");"
+
+                        aCode.push(sCode);
+                    }
+                } else if ( oElement.assertion.assertType === "EXS" ) {
+                    sCode = "Then." + sCurrentPage + ".theElementIsExisting(" + sSelectorFinal + ");"
+                    aCode = [sCode];
+                } else if (oElement.assertion.assertType === "MTC") {
+                    sCode = "Then." + sCurrentPage + ".theElementIsExistingNTimes(" + sSelectorFinal + "," + oElement.assertion.assertMatchingCount + ");"
+                    aCode = [sCode];
+                }
+            }
+
+            return aCode;
+        };
+
         TestHandler.prototype._getCodeFromItem = function (oElement) {
             var sCode = "";
             var aCode = [];
@@ -1108,18 +1302,35 @@ else {
                         return "";
                 }
 
-                sCode = sCode + sAction + "(" + sSelectorFinal;
-                if (sActType == "TYP") {
-                    sCode = sCode + ',"' + oElement.property.selectActInsert + '"';
+                if (sActType === "TYP" && oElement.property.selectActInsert.length === 0) {
+                    //there is no native clearing.. :-) we have to select the next and press the delete key.. yeah
+                    //we do not have to check "replace text" - empty text means ALWAYS replace
+                    sCode = "await t.selectText(" + sSelectorFinal + ");";
+                    aCode = [sCode];
+                    sCode = "await t.pressKey('delete');"
+                    aCode.push(sCode);
+                } else {
+                    sCode = sCode + sAction + "(" + sSelectorFinal;
+                    if (sActType == "TYP") {
+                        sCode = sCode + ',"' + oElement.property.selectActInsert + '"';
+                        if (oElement.property.actionSettings.pasteText === true || oElement.property.actionSettings.testSpeed !== 1 || oElement.property.actionSettings.replaceText === true) {
+                            sCode += ", { paste: " + oElement.property.actionSettings.pasteText + ", speed: " + oElement.property.actionSettings.testSpeed + ", replace: " + oElement.property.actionSettings.replaceText + " }"
+                        }
+                    }
+                    sCode = sCode + ");";
+                    aCode = [sCode];
                 }
-                sCode = sCode + ");";
-                aCode = [sCode];
             } else if (sType === 'ASS') {
                 for (var i = 0; i < oElement.assertion.code.length; i++) {
                     sCode = "await t." + "expect(" + sSelectorFinal + oElement.assertion.code[i] + ";";
                     aCode.push(sCode);
                 }
             }
+
+            if (oElement.property.actionSettings.blur) {
+                aCode.push('await t.click(Selector(".sapUiBody"));'); //this is just a dummy.. a utils method fireing a "blur" would be better..
+            }
+
             return aCode;
         };
 
@@ -1809,6 +2020,20 @@ else {
             this._updatePreview();
         };
 
+        TestHandler.prototype._createActionPopover = function () {
+            if (!this._oPopoverAction) {
+                this._oPopoverAction = sap.ui.xmlfragment({
+                    fragmentContent: this._sXMLPageActionSettings,
+                    fragmentName: "testActionSettings",
+                    id: "testActionSettings"
+                }, this);
+                this._oPopoverAction.setModel(this._oModel, "viewModel");
+                this._oPopoverAction.attachBeforeClose(function () {
+                    this._updatePreview();
+                }.bind(this));
+            }
+        };
+
         TestHandler.prototype._createDialog = function () {
             if (!this._oDialog) {
                 this._oDialog = sap.ui.xmlfragment({
@@ -1822,6 +2047,7 @@ else {
                         $(this._oCurrentDomNode).removeClass('HVRReveal');
                     }
                     $(".HVRReveal").removeClass('HVRReveal');
+                    this._bDialogActive = false;
                 }.bind(this));
             }
         };
@@ -1843,6 +2069,7 @@ else {
             this._oModel.setProperty("/selectMode", true);
             sap.ui.core.Fragment.byId("testDialog", "atrElementsPnl").setExpanded(false);
             this._bShowCodeOnly = false;
+            this._bDialogActive = true;
             this._resetCache();
             this._oDialog.open();
 
@@ -1924,17 +2151,13 @@ else {
             this.onClick(oElement, false);
         };
 
-        TestHandler.prototype.init = function (sXMLPage) {
+        TestHandler.prototype.init = function (sXMLPage, sXMLPageActionSettings) {
             this._sXMLPage = sXMLPage;
+            this._sXMLPageActionSettings = sXMLPageActionSettings;
             $(document).ready(function () {
                 var that = this;
 
                 //create our global overlay..
-                /*
-                this._oGlobalOverlay = jQuery('<div id="tstUI5Overlay" class="HVRPlayStopOverlay"> </div>');
-                this._oGlobalOverlay.appendTo(document.body);
-                this._initGlobalOverlay();*/
-
                 $(document).on("keydown", function (e) {
                     if (e.ctrlKey && e.altKey && e.shiftKey && e.which == 84) {
                         this._bActive = this._bActive !== true;
@@ -1961,7 +2184,7 @@ else {
                 var fnOldEvent = sap.ui.core.Popup.prototype.onFocusEvent;
                 sap.ui.core.Popup.prototype.onFocusEvent = function (oBrowserEvent) {
                     if (that._bActive === false) {
-                        if (!(that._oDialog && that._oDialog.isOpen())) {
+                        if (that._bDialogActive === false) {
                             return fnOldEvent.apply(this, arguments);
                         }
                     }
@@ -1971,6 +2194,8 @@ else {
                         var oElement = aControl[i];
                         while (oElement) {
                             if (oElement.getId() === that._oDialog.getId() || oElement.getId().indexOf("testDialog") !== -1) {
+                                return fnOldEvent.apply(this, arguments);
+                            } if (that._oPopoverAction && (oElement.getId() === that._oPopoverAction.getId() || oElement.getId().indexOf("testActionSettings") !== -1)) {
                                 return fnOldEvent.apply(this, arguments);
                             }
                             oElement = oElement.getParent();
@@ -2368,6 +2593,37 @@ else {
                         }];
                     }.bind(this)
                 },
+                "VIW": {
+                    criteriaKey: "VIW",
+                    criteriaText: "View-Data",
+                    criteriaSpec: function () {
+                        return [{
+                            subCriteriaType: "VIWNM",
+                            subCriteriaText: "View-Name",
+                            value: function (oItem) {
+                                return oItem.viewProperty.viewName;
+                            }.bind(this),
+                            code: function (sValue) {
+                                return { viewProperty: { viewName: sValue } }
+                            },
+                            assert: function () {
+                                return "viewProperty.viewName"
+                            }
+                        }, {
+                            subCriteriaType: "VIWLNM",
+                            subCriteriaText: "Local-View-Name",
+                            value: function (oItem) {
+                                return oItem.viewProperty.localViewName;
+                            }.bind(this),
+                            code: function (sValue) {
+                                return { viewProperty: { localViewName: sValue } }
+                            },
+                            assert: function () {
+                                return "viewProperty.localViewName"
+                            }
+                        }];
+                    }.bind(this)
+                },
                 "AGG": {
                     criteriaKey: "AGG",
                     criteriaText: "Aggregation",
@@ -2536,7 +2792,7 @@ else {
                     getItem: function (oItem) { return oItem; },
                     getScope: function (oScope) { return oScope; },
                     getAssertScope: function () { return "" },
-                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MTA"], this._criteriaTypes["MODL"], this._criteriaTypes["AGG"], this._criteriaTypes["BNDG"]]
+                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MTA"], this._criteriaTypes["MODL"], this._criteriaTypes["AGG"], this._criteriaTypes["BNDG"] , this._criteriaTypes["VIW"]]
                 },
                 "VIW": {
                     getItem: function (oItem) { return this._getParentWithDom(oItem, 1, true); }.bind(this),
@@ -2548,31 +2804,31 @@ else {
                     getItem: function (oItem) { return this._getParentWithDom(oItem, 1); }.bind(this),
                     getAssertScope: function () { return "parent." },
                     getScope: function (oScope) { oScope.parent = oScope.parent ? oScope.parent : {}; return oScope.parent; },
-                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"]]
+                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
                 },
                 "PRT2": {
                     getItem: function (oItem) { return this._getParentWithDom(oItem, 2); }.bind(this),
                     getAssertScope: function () { return "parentL2." },
                     getScope: function (oScope) { oScope.parentL2 = oScope.parentL2 ? oScope.parentL2 : {}; return oScope.parentL2; },
-                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"]]
+                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
                 },
                 "PRT3": {
                     getItem: function (oItem) { return this._getParentWithDom(oItem, 3); }.bind(this),
                     getAssertScope: function () { return "parentL3." },
                     getScope: function (oScope) { oScope.parentL3 = oScope.parentL3 ? oScope.parentL3 : {}; return oScope.parentL3; },
-                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"]]
+                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
                 },
                 "PRT4": {
                     getItem: function (oItem) { return this._getParentWithDom(oItem, 4); }.bind(this),
                     getAssertScope: function () { return "parentL4." },
                     getScope: function (oScope) { oScope.parentL4 = oScope.parentL4 ? oScope.parentL4 : {}; return oScope.parentL4; },
-                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"]]
+                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
                 },
                 "PLBL": {
                     getItem: function (oItem) { return this._getLabelForItem(oItem); }.bind(this),
                     getAssertScope: function () { return "label." },
                     getScope: function (oScope) { oScope.label = oScope.label ? oScope.label : {}; return oScope.label; },
-                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"]]
+                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
                 },
                 "MCMB": {
                     getItem: function (oItem) {
@@ -2580,7 +2836,7 @@ else {
                     }.bind(this),
                     getScope: function (oScope) { oScope.itemdata = oScope.itemdata ? oScope.itemdata : {}; return oScope.itemdata; },
                     getAssertScope: function () { return "itemdata." },
-                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MTA"], this._criteriaTypes["AGG"], this._criteriaTypes["BNDG"]]
+                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MTA"], this._criteriaTypes["AGG"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
                 },
             };
 
@@ -2916,11 +3172,15 @@ else {
 
     //on purpose implemented as local methods
     //this is not readable, but is a easy approach to transform those methods to the UI5Selector Stack (one single method approach)
-    var _getParentWithDom = function (oItem, iCounter) {
+    var _getParentWithDom = function (oItem, iCounter, bViewOnly) {
         oItem = oItem.getParent();
         while (oItem && oItem.getParent) {
             if (oItem.getDomRef && oItem.getDomRef()) {
                 iCounter = iCounter - 1;
+                if (bViewOnly === true && !oItem.getViewData) {
+                    oItem = oItem.getParent();
+                    continue;
+                }
                 if (iCounter <= 0) {
                     return oItem;
                 }
@@ -3032,6 +3292,27 @@ else {
                 return false;
             }
         }
+
+        if (id.viewProperty) {
+            var oView = _getParentWithDom(oItem,1,true);
+            if ( !oView ) {
+                return false;
+            }
+
+            var sViewName = oView.getProperty("viewName");
+            var sViewNameLocal = sViewName.split(".").pop();
+            if (sViewNameLocal.length) {
+                sViewNameLocal = sViewNameLocal.charAt(0).toUpperCase() + sViewNameLocal.substring(1);
+            }
+                
+            if (id.viewProperty.viewName && id.viewProperty.viewName !== sViewName) {
+                return false;
+            }
+            if (id.viewProperty.localViewName && id.viewProperty.localViewName !== sViewNameLocal) {
+                return false;
+            }
+        }
+
         if (id.domChildWith && id.domChildWith.length > 0) {
             var oDomRef = oItem.getDomRef();
             if (!oDomRef) {
@@ -3161,6 +3442,7 @@ else {
             context: {},
             model: {},
             metadata: {},
+            viewProperty: {},
             identifier: { domId: "", ui5Id: "", idCloned: false, idGenerated: false, ui5LocalId: "", localIdClonedOrGenerated: false, ui5AbsoluteId: "" },
             control: null,
             dom: null
@@ -3221,6 +3503,18 @@ else {
         if (bFull === false) {
             oTestGlobalBuffer["fnGetElement"][bFull][oItem.getId()] = oReturn;
             return oReturn;
+        }
+
+        //view..
+        var oView = _getParentWithDom(oItem, 1, true);
+        if (oView) {
+            if (oView.getProperty("viewName")) {
+                oReturn.viewProperty.viewName = oView.getProperty("viewName");
+                oReturn.viewProperty.localViewName = oReturn.viewProperty.viewName.split(".").pop();
+                if (oReturn.viewProperty.localViewName.length) {
+                    oReturn.viewProperty.localViewName = oReturn.viewProperty.localViewName.charAt(0).toUpperCase() + oReturn.viewProperty.localViewName.substring(1);
+                }
+            }
         }
 
         //bindings..

@@ -37,16 +37,36 @@
                 script.parentNode.removeChild(script);
 
                 //send the data
-                var sUrl = chrome.extension.getURL('/scripts/injected/Popover.fragment.xml');
+                var sPopoverAction = "";
+                var sPopover = "";
+                var onDone = function () {
+                    if (!(sPopover.length > 0 && sPopoverAction.length > 0)) {
+                        return;
+                    }
+                    oInitializedPromise.then(function () {
+                        document.dispatchEvent(new CustomEvent('do-ui5-send-xml-view', { detail: { popover: sPopover, settings: sPopoverAction } }));
+                        document.dispatchEvent(new CustomEvent('do-ui5-start'));
+                    });
+                };
+                var sUrl = chrome.extension.getURL('/scripts/injected/PopoverActionSettings.fragment.xml');
                 var xhr = new XMLHttpRequest();
                 xhr.open('GET', sUrl);
                 xhr.send(null);
                 xhr.onreadystatechange = function () {
                     if (xhr.readyState === 4) {
-                        oInitializedPromise.then(function () {
-                            document.dispatchEvent(new CustomEvent('do-ui5-send-xml-view', { detail: xhr.responseText }));
-                            document.dispatchEvent(new CustomEvent('do-ui5-start'));
-                        });
+                        sPopoverAction = xhr.responseText;
+                        onDone();
+                    }
+                };
+
+                var xhr2 = new XMLHttpRequest();
+                sUrl = chrome.extension.getURL('/scripts/injected/Popover.fragment.xml');
+                xhr2.open('GET', sUrl);
+                xhr2.send(null);
+                xhr2.onreadystatechange = function () {
+                    if (xhr2.readyState === 4) {
+                        sPopover = xhr2.responseText;
+                        onDone();
                     }
                 };
             };

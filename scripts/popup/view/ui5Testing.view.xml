@@ -1,10 +1,12 @@
-<core:FragmentDefinition xmlns="sap.m" 
+<mvc:View controllerName="com.ui5.testing.controller.ui5Testing" 
+    xmlns="sap.m" 
     xmlns:l="sap.ui.layout" 
+    xmlns:mvc="sap.ui.core.mvc" 
     xmlns:f="sap.ui.layout.form" 
     xmlns:code="sap.ui.codeeditor" 
     xmlns:u="sap.ui.unified" 
     xmlns:core="sap.ui.core">
-    <Dialog resizable="true" contentWidth="50%" contentHeight="100%" stretch="{viewModel>/isStretched}" id="popoverTestingDialog" class="sapUiSizeCompact" draggable="true" stretchOnPhone="true">
+    <Page class="sapUiSizeCompact">
         <customHeader>
             <Bar>
                 <contentMiddle>
@@ -437,12 +439,12 @@
                 </IconTabBar>
             </VBox>
         </content>
-        <buttons>
+        <Toolbar>
             <Button id="btSaveAndRestart" visible="{= ${viewModel>/selectMode} === false }" type="Emphasized" text="Close and Restart" press="_onCloseAndRestart"/>
             <Button id="btClose" type="Reject" visible="{= ${viewModel>/selectMode} === true }" text="Ignore &amp; Continue" press="_onClose"/>
             <Button id="btCloseC" type="Reject" visible="{= ${viewModel>/selectMode} === false }" text="Close" press="_onCloseAndStop"/>
             <Button id="btSave" type="Accept" text="Save &amp; Continue" press="_onSave" visible="{viewModel>/selectMode}"/>
             <Button id="btSaveAndFinish" type="Emphasized" text="Finish" press="_onSaveAndFinish" visible="{viewModel>/selectMode}"/>
-        </buttons>
-    </Dialog>
-</core:FragmentDefinition>
+        </Toolbar>
+    </Page>
+</mvc:View>
