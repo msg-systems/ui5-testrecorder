@@ -1,0 +1,41 @@
+<mvc:View controllerName="com.ui5.testing.controller.testOverview" 
+    xmlns="sap.m" 
+    xmlns:l="sap.ui.layout" 
+    xmlns:mvc="sap.ui.core.mvc" 
+    xmlns:f="sap.ui.layout.form" 
+    xmlns:code="sap.ui.codeeditor" 
+    xmlns:u="sap.ui.unified" 
+    xmlns:semantic="sap.m.semantic" 
+    xmlns:core="sap.ui.core">
+    <semantic:FullscreenPage navButtonPress="onNavBack" showNavButton="true" title="Test Overview" busy="{viewModel>/busy}">
+        <semantic:content>
+            <Table fixedLayout="false" inset="false" items="{ path: 'viewModel>/items', sorter: { path: 'createdAt' } }" noDataText="{i18n>notFoundTitle}">
+                <columns>
+                    <Column>
+                        <Text text="UUID" />
+                    </Column>
+                    <Column>
+                        <Text text="Created At" />
+                    </Column>
+                    <Column>
+                        <Text text="Test-Name" />
+                    </Column>
+                    <Column>
+                        <Text text="URL" />
+                    </Column>
+                </columns>
+                <items>
+                    <ColumnListItem type="Navigation" press="onNavigateToTest">
+                        <cells>
+                            <Text text="{viewModel>uuid}"/>
+                            <Text text="{viewModel>createdAt}"/>
+                            <Text text="{viewModel>testName}"/>
+                            <Text text="{viewModel>testUrl}"/>
+                        </cells>
+                    </ColumnListItem>
+                </items>
+            </Table>
+
+        </semantic:content>
+    </semantic:FullscreenPage>
+</mvc:View>

@@ -30,73 +30,78 @@
                     resolve();
                 });
             });
-            /**
-             * Delete the injected file, when it is loaded.
-             */
+
             script.onload = function () {
                 script.parentNode.removeChild(script);
-
-                //send the data
-                var sPopoverAction = "";
-                var sPopover = "";
-                var onDone = function () {
-                    if (!(sPopover.length > 0 && sPopoverAction.length > 0)) {
-                        return;
-                    }
-                    oInitializedPromise.then(function () {
-                        document.dispatchEvent(new CustomEvent('do-ui5-send-xml-view', { detail: { popover: sPopover, settings: sPopoverAction } }));
-                        document.dispatchEvent(new CustomEvent('do-ui5-start'));
-                    });
-                };
-                var sUrl = chrome.extension.getURL('/scripts/injected/PopoverActionSettings.fragment.xml');
-                var xhr = new XMLHttpRequest();
-                xhr.open('GET', sUrl);
-                xhr.send(null);
-                xhr.onreadystatechange = function () {
-                    if (xhr.readyState === 4) {
-                        sPopoverAction = xhr.responseText;
-                        onDone();
-                    }
-                };
-
-                var xhr2 = new XMLHttpRequest();
-                sUrl = chrome.extension.getURL('/scripts/injected/Popover.fragment.xml');
-                xhr2.open('GET', sUrl);
-                xhr2.send(null);
-                xhr2.onreadystatechange = function () {
-                    if (xhr2.readyState === 4) {
-                        sPopover = xhr2.responseText;
-                        onDone();
-                    }
-                };
+                document.dispatchEvent(new CustomEvent('do-ui5-init'));
             };
 
             oInitializedPromise.then(function () {
+                //(1) inform popup, that we are loaded.. yay..
+                chrome.runtime.sendMessage({ type: "loaded", data: { ok: true } }, function (response) {
+                });
+
                 var oLastDom = null;
                 document.addEventListener("mousedown", function (event) {
-                    //right click
                     if (event.button == 2) {
                         oLastDom = event.target;
                     }
                 }, true);
 
+                var oLastAnswer = {};
+                document.addEventListener('do-ui5-from-inject-to-extension', function (oXMLEvent) {
+                    chrome.runtime.sendMessage(oXMLEvent.detail, function (response) {
+                    });
+                });
+                document.addEventListener('do-ui5-from-inject-to-answer', function (oXMLEvent) {
+                    oLastAnswer[oXMLEvent.detail.uuid].data = oXMLEvent.detail;
+                });
+                document.addEventListener('do-ui5-from-inject-to-async', function (oXMLEvent) {
+                    oLastAnswer[oXMLEvent.detail.uuid].data = oXMLEvent.detail;
+
+                    chrome.runtime.sendMessage({ type: "answer-async", data: oXMLEvent.detail }, function (response) {
+                    });
+                });
+
+                //forewarding from extension to injection...
                 chrome.runtime.onMessage.addListener(
                     function (request, sender, sendResponse) {
-                        sendResponse({ ui5TestingRegistered: true });
-                        if (request.startForControl) {
-                            if (oLastDom) {
-                                document.dispatchEvent(new CustomEvent('do-ui5-start', { detail: { domId: oLastDom.id } }));
-                                return;
-                            }
-                        } else if (request.checkRegistration) {
-                            sendResponse(true);
-                            return;
-                        } else if (request.showCode) {
-                            document.dispatchEvent(new CustomEvent('do-show-code'));
-                            return;
+                        if (request.type && request.type === "ui5-check-if-injected" ) {
+                            sendResponse({
+                                injected: true
+                            });
                         }
-                        document.dispatchEvent(new CustomEvent('do-ui5-switch'));
-                    });
+                        setTimeout(function () {
+                            if (request.type) {
+                                oLastAnswer[request.uuid] = { data: null, uuid: request.uuid, resolver: sendResponse };
+
+                                document.dispatchEvent(new CustomEvent('do-ui5-from-extension-to-inject', { detail: request }));
+
+                                if (oLastAnswer[request.uuid].data !== null) {
+                                    if (oLastAnswer[request.uuid].data.type !== "answer-async") {
+                                        sendResponse(oLastAnswer[request.uuid].data);
+                                    } else {
+                                        sendResponse({
+                                            data: {
+                                                asyncAnswer: true
+                                            }
+                                        })
+                                    }
+                                }
+                            }
+                            if (request.startForControl) {
+                                if (oLastDom) {
+                                    document.dispatchEvent(new CustomEvent('do-ui5-start', { detail: { domId: oLastDom.id } }));
+                                    return;
+                                }
+                            }
+                        });
+
+                        return true; //allow async processing..
+                    }, 0);
+            }, function () {
+                chrome.runtime.sendMessage({ type: "loaded", data: { ok: false } }, function (response) {
+                });
             });
         }());
 

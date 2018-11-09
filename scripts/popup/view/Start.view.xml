@@ -6,17 +6,39 @@
     xmlns:code="sap.ui.codeeditor" 
     xmlns:u="sap.ui.unified" 
     xmlns:av="sap.f" 
+    xmlns:semantic="sap.m.semantic" 
     xmlns:core="sap.ui.core">
-    <Page class="sapUiSizeCompact" title="UI5 Automated Testing">
+    <semantic:FullscreenPage showFooter="false" showNavButton="false" title="UI5 Automated Testing" busy="{viewModel>/busy}">
         <VBox fitContainer="true" height="100%">
-            <core:Icon size="128px" decorative="false" press="onRecord" color="red" src="sap-icon://record">
-                <core:layoutData>
+            <HBox fitContainer="true" height="100%">
+                <GenericTile class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" header="Start a new Recording" press="onStartNewRecording" subheader="{viewModel>/currentUrl}">
+                    <TileContent>
+                        <ImageContent src="sap-icon://record" />
+                    </TileContent>
+                    <layoutData>
+                        <FlexItemData alignSelf="Center"/>
+                    </layoutData>
+                </GenericTile>
+                <GenericTile class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" header="List Existing Recordings" press="onOpenOverview">
+                    <TileContent>
+                        <ImageContent src="sap-icon://list" />
+                    </TileContent>
+                    <layoutData>
+                        <FlexItemData alignSelf="Center"/>
+                    </layoutData>
+                </GenericTile>
+                <GenericTile class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" header="Settings" press="onOpenSettings">
+                    <TileContent>
+                        <ImageContent src="sap-icon://settings" />
+                    </TileContent>
+                    <layoutData>
+                        <FlexItemData alignSelf="Center"/>
+                    </layoutData>
+                </GenericTile>
+                <layoutData>
                     <FlexItemData alignSelf="Center"/>
-                </core:layoutData>
-            </core:Icon>
-            <layoutData>
-                <FlexItemData alignSelf="Center"/>
-            </layoutData>
+                </layoutData>
+            </HBox>
         </VBox>
-    </Page>
+    </semantic:FullscreenPage>
 </mvc:View>

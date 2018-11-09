@@ -1,7 +1,9 @@
 var TestHandlerSingleton = null;
 
-document.addEventListener('do-ui5-send-xml-view', function (oXMLEvent) {
-    TestHandlerSingleton.init(oXMLEvent.detail.popover, oXMLEvent.detail.settings);
+document.addEventListener('do-ui5-init', function (oXMLEvent) {
+    if (TestHandlerSingleton) {
+        TestHandlerSingleton.init();
+    }
 });
 document.addEventListener('do-ui5-switch', function (oXMLEvent) {
     TestHandlerSingleton.switch();
@@ -9,6 +11,28 @@ document.addEventListener('do-ui5-switch', function (oXMLEvent) {
 document.addEventListener('do-show-code', function (oXMLEvent) {
     TestHandlerSingleton.showCode();
 });
+document.addEventListener("do-ui5-from-extension-to-inject", function (oXMLEvent) {
+    var uuid = oXMLEvent.detail.uuid;
+    if (uuid) {
+        delete oXMLEvent.detail.uuid;
+    }
+    var oReturn = TestHandlerSingleton.handleEvent(oXMLEvent.detail.type, oXMLEvent.detail.data);
+    if (!oReturn) {
+        oReturn = { processed: true };
+    } else {
+        oReturn.processed = true;
+    }
+
+    if (oReturn instanceof Promise) {
+        document.dispatchEvent(new CustomEvent('do-ui5-from-inject-to-answer', { detail: { type: "answer-async", uuid: uuid, data: null } }));
+        oReturn.then(function (oData) {
+            document.dispatchEvent(new CustomEvent('do-ui5-from-inject-to-async', { detail: { type: "answer", uuid: uuid, data: oData } }));
+        })
+    } else {
+        document.dispatchEvent(new CustomEvent('do-ui5-from-inject-to-answer', { detail: { type: "answer", uuid: uuid, data: oReturn } }));
+    }
+});
+
 document.addEventListener('do-ui5-start', function (oXMLEvent) {
     if (oXMLEvent.detail && oXMLEvent.detail.domId) {
         TestHandlerSingleton.startFor(oXMLEvent.detail.domId);
@@ -21,10 +45,10 @@ var oTestGlobalBuffer = {};
 
 //super shitty code - we are just architectuarlly not designed correctly here..
 if (typeof sap === "undefined" || typeof sap.ui === "undefined" || typeof sap.ui.getCore === "undefined" || !sap.ui.getCore() || !sap.ui.getCore().isInitialized()) {
-    document.dispatchEvent(new CustomEvent('do-ui5-ok', { detail: { ok: false } }));
+    document.dispatchEvent(new CustomEvent('do-ui5-ok', { detail: { ok: false, version: "none" } }));
 }
 else {
-    document.dispatchEvent(new CustomEvent('do-ui5-ok', { detail: { ok: true } }));
+    document.dispatchEvent(new CustomEvent('do-ui5-ok', { detail: { ok: true, version: sap.ui.version } }));
 
     sap.ui.define([
         "sap/ui/base/Object",
@@ -79,13 +103,6 @@ else {
                     assertFilter: [],
                     subActionTypes: [],
                     supportAssistantResult: []
-                },
-                codeSettings: {
-                    language: "TCF",
-                    testName: document.title,
-                    testCategory: document.title,
-                    testUrl: window.location.href,
-                    supportAssistant: false
                 },
                 dynamic: {
                     attrType: []
@@ -147,9 +164,6 @@ else {
                         { key: "NP", text: "Not Contains" }
                     ]
                 },
-                selectMode: true, //are we within selection or within code check
-                completeCode: "",
-                completeCodeSaved: "",
                 ratingOfAttributes: 3,
                 isStretched: false,
                 codes: [],
@@ -161,134 +175,41 @@ else {
             _bStarted: false,
             constructor: function () {
                 this._getCriteriaTypes();
-                this._initMessagePopover();
             }
         });
+
+        TestHandler.prototype.handleEvent = function (sEventType, oEventData) {
+            if (sEventType === "start") {
+                this._start();
+            } else if (sEventType === "stop") {
+                this._stop();
+            } else if (sEventType === "find") {
+                return this._getFoundElements(oEventData);
+            } else if (sEventType === "execute") {
+                this._executeAction(oEventData);
+            } else if (sEventType === "runSupportAsssistant") {
+                return this._runSupportAssistant(oEventData);
+            } else if (sEventType === "getwindowinfo") {
+                return this._getWindowInfo();
+            }
+        };
+
+        TestHandler.prototype._getWindowInfo = function () {
+            return {
+                title: document.title,
+                url: window.location.href,
+                hash: window.location.hash,
+                ui5Version: sap.ui.version
+            };
+        };
+
+        TestHandler.prototype.fireEventToContent = function (sEventType, oEventData) {
+            document.dispatchEvent(new CustomEvent('do-ui5-from-inject-to-extension', { detail: { type: sEventType, data: oEventData } }));
+        };
 
         TestHandler.prototype.onShowActionSettings = function (oEvent) {
             this._createActionPopover();
             this._oPopoverAction.openBy(oEvent.getSource());
-        };
-
-        TestHandler.prototype._initMessagePopover = function () {
-            var oMessageTemplate = new MessageItem({
-                type: '{viewModel>type}',
-                title: '{viewModel>title}',
-                description: '{viewModel>description}',
-                subtitle: '{viewModel>subtitle}'
-            });
-
-            this._oMessagePopover = new MessagePopover({
-                items: {
-                    path: 'viewModel>/element/messages',
-                    template: oMessageTemplate
-                }
-            });
-
-            this._oMessagePopoverAssert = new MessagePopover({
-                items: {
-                    path: 'viewModel>assertMessages',
-                    template: oMessageTemplate
-                }
-            });
-
-            this._oMessagePopover.setModel(this._oModel, "viewModel");
-            this._oMessagePopoverAssert.setModel(this._oModel, "viewModel");
-
-            var oTemplateCtx = new sap.m.ColumnListItem({
-                type: "Active",
-                cells: [
-                    new sap.m.ObjectIdentifier({ title: '{viewModel>typeTxt}' }),
-                    new sap.m.ObjectIdentifier({ title: '{viewModel>attribute}' }),
-                    new sap.m.Text({ text: '{viewModel>valueToString}' }),
-                    new sap.m.ObjectNumber({
-                        visible: '{viewModel>/element/itemCloned}',
-                        number: '{viewModel>importance}',
-                        state: '{viewModel>numberState}',
-                        unit: '%'
-                    }),
-                ]
-            });
-            this._oTableContext = new sap.m.Table({
-                mode: "MultiSelect",
-                itemPress: function (oEvent) {
-                    oEvent.getSource().setSelected(oEvent.getSource().getSelected() === false);
-                },
-                columns: [
-                    new sap.m.Column({ header: new sap.m.Text({ text: "Type" }) }),
-                    new sap.m.Column({ header: new sap.m.Text({ text: "Name" }) }),
-                    new sap.m.Column({ header: new sap.m.Text({ text: "Value" }) }),
-                    new sap.m.Column({ visible: '{viewModel>/element/itemCloned}', header: new sap.m.Text({ text: "Expected Quality" }) }),
-                ],
-                items: {
-                    path: 'viewModel>/element/possibleContext',
-                    template: oTemplateCtx
-                }
-            });
-
-            this._oSelectDialog = new sap.m.Dialog({
-                contentHeight: "75%",
-                contentWidth: "40%",
-                id: "tstDialog",
-                title: "Please specifiy a unique combination",
-                content: new sap.m.VBox({
-                    items: [
-                        new sap.m.SearchField({
-                            liveChange: function (oEvent) {
-                                var sSearch = oEvent.getParameter("newValue");
-                                if (!sSearch || !sSearch.length) {
-                                    this._oTableContext.getBinding("items").filter([]);
-                                } else {
-                                    this._oTableContext.getBinding("items").filter([
-                                        new sap.ui.model.Filter({
-                                            and: false,
-                                            filters: [
-                                                new sap.ui.model.Filter({
-                                                    path: "typeTxt",
-                                                    operator: sap.ui.model.FilterOperator.Contains,
-                                                    value1: sSearch
-                                                }),
-                                                new sap.ui.model.Filter({
-                                                    path: "attribute",
-                                                    operator: sap.ui.model.FilterOperator.Contains,
-                                                    value1: sSearch
-                                                }),
-                                                new sap.ui.model.Filter({
-                                                    path: "valueToString",
-                                                    operator: sap.ui.model.FilterOperator.Contains,
-                                                    value1: sSearch
-                                                })]
-                                        })
-                                    ]);
-                                }
-                            }.bind(this)
-                        }),
-                        this._oTableContext
-                    ]
-                }),
-                beginButton: new sap.m.Button({
-                    text: 'Close',
-                    press: function () {
-                        this._oSelectDialog.close();
-                    }.bind(this)
-                }),
-                endButton: new sap.m.Button({
-                    text: 'Save',
-                    press: function () {
-                        var aItems = this._oTableContext.getSelectedItems();
-                        if (aItems && aItems.length) {
-                            for (var j = 0; j < aItems.length; j++) {
-                                var oBndgCtxObj = aItems[j].getBindingContext("viewModel").getObject();
-                                this._add("/element/attributeFilter", { attributeType: "OWN", criteriaType: oBndgCtxObj.type, subCriteriaType: oBndgCtxObj.bdgPath });
-                            }
-                            this._updatePreview();
-                        }
-                        this._oSelectDialog.close();
-                    }.bind(this)
-                })
-            });
-
-            this._oSelectDialog.addStyleClass("sapUiSizeCompact");
         };
 
         TestHandler.prototype._getControlFromDom = function (oDomNode) {
@@ -299,104 +220,21 @@ else {
             return oControls[0];
         };
 
-        TestHandler.prototype._onClose = function () {
-            this._oDialog.close();
-            this._start();
-        };
-
-        TestHandler.prototype._onCloseAndStop = function () {
-            this._stop();
-            this._oDialog.close();
-        };
-
-        TestHandler.prototype._adjustBeforeSaving = function (oElement) {
-            //what we are actually saving, is an extremly reduced form, of everything we need for code generation
-            var oReturn = {
-                property: oElement.property,
-                item: {
-                    identifier: oElement.item.identifier,
-                    viewProperty: oElement.item.viewProperty,
-                    metadata: oElement.item.metadata
-                },
-                attributeFilter: oElement.attributeFilter,
-                assertFilter: oElement.assertFilter,
-                selector: this._getSelectorDefinition(oElement),
-                assertion: this._getAssertDefinition(oElement),
-                href: window.location.href,
-                hash: window.location.hash
-            };
-
-            return JSON.parse(JSON.stringify(oReturn));
-        };
-
-        TestHandler.prototype._onSaveAndFinish = function () {
-            this._save(function () {
-                setTimeout(function () {
-                    this.showCode(); //wait for navigation to be triggered in case there is any, would be better to attach to an navigation handler
-                }.bind(this), 500);
-            }.bind(this));
-        };
-
-        TestHandler.prototype._onCloseAndRestart = function () {
-            this._oDialog.close();
-            this._oModel.setProperty("/elements", []);
-            this._start();
-        };
-
-        TestHandler.prototype._onSave = function () {
-            this._save(function () {
-                if (this._bStarted === true) {
-                    this._start();
-                }
-            }.bind(this));
-        };
-
-        TestHandler.prototype._save = function (fnCallback) {
-            this._checkAndDisplay(function () {
-                this._oDialog.close();
-
-                var aElements = this._oModel.getProperty("/elements");
-                var oCurrentElement = this._oModel.getProperty("/element");
-                aElements.push(this._adjustBeforeSaving(oCurrentElement));
-                this._oModel.setProperty("/elements", aElements);
-
-                this._oModel.setProperty("/codes", this._testCafeGetCode(this._oModel.getProperty("/elements")));
-                this._oModel.setProperty("/elementLength", aElements.length);
-                this._executeAction(this._oModel.getProperty("/element"));
-                fnCallback();
-            }.bind(this));
-        };
-
         TestHandler.prototype._getFinalDomNode = function (oElement) {
-            var sExtension = this._oModel.getProperty("/element/property/domChildWith");
+            var sExtension = oElement.property.domChildWith;
             if (!sExtension.length) {
-                return $(oElement.control.getDomRef());
+                return $(sap.ui.getCore().byId(oElement.item.identifier.ui5AbsoluteId).getDomRef());
             }
 
-            return $("*[id$='" + (oElement.control.getDomRef().id + sExtension) + "']");
+            return $("*[id$='" + (oElement.item.identifier.ui5AbsoluteId + sExtension) + "']");
         };
 
-        TestHandler.prototype._executeAction = function () {
-            var sType = this._oModel.getProperty("/element/property/type");
-            if (sType !== "ACT") {
-                return false;
-            }
-            var sActType = this._oModel.getProperty("/element/property/actKey"); //PRS|TYP
-
-            var aFound = this._getFoundElements(1);
-            if (aFound.length === 0) {
-                return false;
-            }
-
-            var oItem = aFound[0];
-            if (!oItem.dom) {
-                return false;
-            }
+        TestHandler.prototype._executeAction = function (oEventData) {
+            debugger;
+            var oItem = oEventData.element;
             var oDom = this._getFinalDomNode(oItem);
 
-            if (sActType === "PRS") {
-                //oDom.trigger("tap");
-
+            if (oItem.property.actKey === "PRS") {
                 //send touch event..
                 var event = new MouseEvent('mousedown', {
                     view: window,
@@ -405,14 +243,7 @@ else {
                 });
                 event.originalEvent = event; //self refer
                 oDom.get(0).dispatchEvent(event);
-                /*
-                var event = new MouseEvent('mousemove', {
-                    view: window,
-                    bubbles: true,
-                    cancelable: true
-                });
-                event.originalEvent = event; //self refer
-                oDom.get(0).dispatchEvent(event);*/
+
                 var event = new MouseEvent('mouseup', {
                     view: window,
                     bubbles: true,
@@ -428,11 +259,11 @@ else {
                 });
                 event.originalEvent = event; //self refer
                 oDom.get(0).dispatchEvent(event);
-            } else if (sActType === "TYP") {
+            } else if (oItem.property.actKey === "TYP") {
                 var e = jQuery.Event("keypress");
                 e.which = 13; // Enter
-                var sText = this._oModel.getProperty("/element/property/selectActInsert");
-                if (sText.length > 0 && this._oModel.getProperty("/element/property/actionSettings/replaceText") === false) {
+                var sText = oItem.property.selectActInsert;
+                if (sText.length > 0 && oItem.property.actionSettings.replaceText === false) {
                     oDom.val(oDom.val() + sText);
                 } else {
                     oDom.val(sText);
@@ -450,7 +281,7 @@ else {
                 oDom.get(0).dispatchEvent(event);
 
                 //afterwards trigger the blur event, in order to trigger the change event
-                if (this._oModel.getProperty("/element/property/actionSettings/blur") === true) {
+                if (oItem.property.actionSettings.blur === true) {
                     var event = new MouseEvent('blur', {
                         view: window,
                         bubbles: true,
@@ -460,12 +291,6 @@ else {
                     oDom.get(0).dispatchEvent(event);
                 }
             }
-        };
-
-        TestHandler.prototype.onUpdateAction = function (oEvent) {
-            this._updateSubActionTypes(false);
-            this._adjustDomChildWith(this._oModel.getProperty("/element/item"));
-            this._updatePreview();
         };
 
         TestHandler.prototype._getAllChildrenOfDom = function (oDom, oControl) {
@@ -522,234 +347,6 @@ else {
             this._oModel.setProperty("/element/subActionTypes", aRows);
         };
 
-        //returns { ok: false/true + message }
-        TestHandler.prototype._check = function (fnCallback) {
-            var oReturn = this._getAttributeRating();
-
-            return {
-                rating: oReturn.rating,
-                message: oReturn.messages.length ? oReturn.messages[0].description : "",
-                messages: oReturn.messages
-            };
-        };
-
-        TestHandler.prototype._checkElementNumber = function () {
-            var oCheck = this._check();
-            if (oCheck.rating === 5) {
-                this._oModel.setProperty("/element/property/elementState", "Success");
-            } else if (oCheck.rating >= 2) {
-                this._oModel.setProperty("/element/property/elementState", "Warning");
-            } else {
-                this._oModel.setProperty("/element/property/elementState", "Error");
-            }
-        };
-
-        TestHandler.prototype.onExplain = function (oEvent) {
-            this._oMessagePopover.toggle(oEvent.getSource());
-        }
-
-        //check if the data entered seems to be valid.. following checks are performed
-        //(1) ID is used and generated
-        //(2) ID is used and cloned
-        //(3) DOM-ID is used (should be avoided where possible)
-        //(4) No or >1 Element is selected..
-        TestHandler.prototype._checkAndDisplay = function (fnCallback) {
-            var oResult = this._check();
-
-            if (oResult.rating !== 5) {
-                MessageBox.show(oResult.message, {
-                    styleClass: "sapUiCompact",
-                    icon: MessageBox.Icon.WARNING,
-                    title: "There are open issues - Are you sure you want to save?",
-                    actions: [MessageBox.Action.OK, MessageBox.Action.CANCEL],
-                    onClose: function (oAction) {
-                        if (oAction === MessageBox.Action.OK) {
-                            fnCallback();
-                        }
-                    }
-                });
-            } else {
-                fnCallback();
-            }
-        };
-
-        TestHandler.prototype._testCafeGetCode = function (aElements) {
-            var aCodes = [];
-            var bSupportAssistant = this._oModel.getProperty("/codeSettings/supportAssistant");
-
-            //for testcafe we are returning: (1) installation instructions..
-            var oCodeInstall = {
-                codeName: "Installation (Non WebIDE)",
-                type: "FTXT",
-                order: 2,
-                code: "<h3>Installation</h3>" +
-                    "<p>Execute the following command-line paramters:</p>" +
-                    "<code>npm install testcafe testcafe-reporter-xunit ui5-testcafe-selector --save-dev</code>" +
-                    "<p>This will install all relevant packages for the test-automation runner.</p>" +
-                    "<h3>Test-Configuration</h3>" +
-                    "<p>Write a new testfile and copy/paste the code. The file can both be a typescript or a javascript file.</p>" +
-                    "<h3>Running</h3>" +
-                    "<p>Run via Command-Line via: <code>testcafe chrome your_test_file.js/ts</code><br/>" +
-                    "Run via Grunt using <a href=\"https://www.npmjs.com/package/grunt-testcafe\" style=\"color:green; font-weight:600;\">grunt-testcafe</a></p>"
-            }
-            aCodes.push(oCodeInstall);
-
-            //(2) execute script
-            var oCodeTest = {
-                codeName: "Test",
-                type: "CODE",
-                order: 1
-            };
-            var sCode = "";
-            var oCodeSettings = this._oModel.getProperty("/codeSettings");
-            var bSupportAssistantNeeded = bSupportAssistant;
-            var bSelectorNeeded = false;
-            for (var i = 0; i < aElements.length; i++) {
-                if (aElements[i].property.type === "SUP") {
-                    bSupportAssistantNeeded = true;
-                }
-                if (aElements[i].property.actionSettings.blur === true) {
-                    bSelectorNeeded = true;
-                }
-            }
-
-            sCode = 'import { UI5Selector ' + (bSupportAssistantNeeded ? ", utils " : "") + '} from "ui5-testcafe-selector";\n';
-            if (bSelectorNeeded === true) {
-                sCode += 'import { Selector } from "testcafe";\n';
-            }
-            sCode += "fixture('" + oCodeSettings.testCategory + "')\n";
-            sCode += "  .page('" + oCodeSettings.testUrl + "');\n";
-            sCode += "\n";
-            sCode += "test('" + oCodeSettings.testName + "', async t => {\n";
-            var sCurrentHash = null;
-            var bVariableInitialized = false;
-            var bHashChanged = true;
-            for (var i = 0; i < aElements.length; i++) {
-                var aLines = [];
-                if (aElements[i].property.type !== "SUP") {
-                    aLines = this._getCodeFromItem(aElements[i]);
-                }
-
-                if (sCurrentHash === null || sCurrentHash !== aElements[i].hash) {
-                    if (sCurrentHash !== null) {
-                        sCode = sCode + "\n  //new route:" + aElements[i].hash + "\n";
-                    }
-                    sCurrentHash = aElements[i].hash;
-                    bHashChanged = true;
-                }
-
-                if ((bHashChanged === true && bSupportAssistant) || aElements[i].property.type === "SUP") {
-                    sCode += "  " + (bVariableInitialized === false ? "var " : "") + "oSupportAssistantResult = await utils.supportAssistant(t, '" + aElements[i].item.metadata.componentName + "' );\n";
-                    sCode += "  " + "await t.expect(oSupportAssistantResult.High.length).eql(0);\n";
-                    bVariableInitialized = true;
-                }
-
-                for (var j = 0; j < aLines.length; j++) {
-                    sCode += "  " + aLines[j] + "\n";
-                }
-            }
-            sCode += "});";
-            oCodeTest.code = sCode;
-            aCodes.push(oCodeTest);
-            return aCodes;
-        };
-
-
-        TestHandler.prototype._opaGetCode = function (aElements) {
-            var aCodes = [];
-            var bSupportAssistant = this._oModel.getProperty("/codeSettings/supportAssistant");
-
-            //for testcafe we are returning: (1) installation instructions..
-            var oCodeInstall = {
-                codeName: "Usage",
-                type: "FTXT",
-                order: 2,
-                code: "<h3>t.b.d.</h3>"
-            }
-            aCodes.push(oCodeInstall);
-
-            //(2) execute script
-            var oCodeTest = {
-                codeName: "Test",
-                type: "CODE",
-                order: 1
-            };
-            var sCode = "";
-            var oCodeSettings = this._oModel.getProperty("/codeSettings");
-
-            sCode = 'sap.ui.define([;\n';
-            sCode += '    "sap/ui/test/opaQunit"\n';
-            sCode += '], function (opaTest) {\n';
-            sCode += '    "use strict";\n\n';
-            sCode += '    QUnit.module("' + oCodeSettings.testCategory + '");\n\n';
-
-            //group elements by assertions (Given, When, Then)
-            var aCluster = [[]];
-            var bNextIsBreak = false;
-            for (var i = 0; i < aElements.length; i++) {
-                if (bNextIsBreak === true) {
-                    aCluster.push([]);
-                    bNextIsBreak = false;
-                }
-                if (i < aElements.length - 1 && aElements[i].property.type === "ASS" && aElements[i + 1].property.type === "ACT") {
-                    bNextIsBreak = true;
-                }
-                aCluster[aCluster.length - 1].push(aElements[i]);
-            }
-
-            for (var i = 0; i < aCluster.length; i++) {
-                var aLines = [];
-                sCode += "    opaTest('Test " + i + "', function (Given, When, Then) {\n";
-                for (var j = 0; j < aCluster[i].length; j++) {
-                    var oElement = aCluster[i][j];
-
-                    if (oElement.property.type !== "SUP") {
-                        aLines = this._getOPACodeFromItem(oElement);
-                    }
-
-                    for (var x = 0; x < aLines.length; x++) {
-                        sCode += "        " + aLines[x] + "\n";
-                    }
-                }
-
-                sCode += "    });\n";
-            }
-
-            sCode += "});";
-            oCodeTest.code = sCode;
-            aCodes.push(oCodeTest);
-            return aCodes;
-        };
-
-        TestHandler.prototype._updatePreview = function () {
-            var oItem = this._oModel.getProperty("/element");
-            oItem = this._adjustBeforeSaving(oItem);
-            var aStoredItems = [];
-            if (this._bShowCodeOnly === false) {
-                aStoredItems = aStoredItems.concat(this._oModel.getProperty("/elements"), [oItem]);
-            } else {
-                aStoredItems = this._oModel.getProperty("/elements");
-            }
-
-            var sCodeLanguage = this._oModel.getProperty("/codeSettings/language");
-            if (sCodeLanguage === "OPA") {
-                this._oModel.setProperty("/codes", this._opaGetCode(aStoredItems));
-            } else {
-                //testcafe by default
-                this._oModel.setProperty("/codes", this._testCafeGetCode(aStoredItems));
-            }
-            var aElements = this._getFoundElements(0);
-            this._oModel.setProperty("/element/identifiedElements", aElements);
-            if (aElements.length !== 1) {
-                //we are only expanding, in case we are in ACTION mode - reason: the user has to do sth. in case we are in action mode, as only one can be selected..
-                if (this._oModel.getProperty("/element/property/type") === 'ACT') {
-                    sap.ui.core.Fragment.byId("testDialog", "atrElementsPnl").setExpanded(true);
-                }
-            }
-            this._checkElementNumber();
-            this._resumePerformanceBindings();
-        };
-
         TestHandler.prototype._findItemAndExclude = function (oSelector) {
             var sStringified = JSON.stringify(oSelector);
             var aInformation = [];
@@ -769,85 +366,12 @@ else {
             return aReturn;
         }
 
-        TestHandler.prototype._getFoundElements = function (iGetFullData) {
-            var oDefinition = this._getSelectorDefinition(typeof oElement === "undefined" ? this._oModel.getProperty("/element") : oElement);
-            var aItems = this._findItemAndExclude(oDefinition.selectorAttributes);
+        TestHandler.prototype._getFoundElements = function (sString) {
+            var aItems = this._findItemAndExclude(sString);
             var aItemsEnhanced = [];
-            if (this._oModel.getProperty("/element/property/type") === 'ASS' &&
-                this._oModel.getProperty("/element/property/assKey") === 'ATTR') {
-                iGetFullData = -1;
-            }
             for (var i = 0; i < aItems.length; i++) {
-                aItemsEnhanced.push(this._getElementInformation(aItems[i], aItems[i].getDomRef(), i < iGetFullData || iGetFullData === -1));
-            }
-
-            //append information about assertions..
-            if (this._oModel.getProperty("/element/property/type") === 'ASS' &&
-                this._oModel.getProperty("/element/property/assKey") === 'ATTR') {
-                var oAssertDef = this._oModel.getProperty("/element/assertFilter");
-                for (var i = 0; i < aItemsEnhanced.length; i++) {
-                    var bFound = false;
-                    var aAllErrors = [];
-                    //check for every single assert, and store result..
-                    for (var j = 0; j < oAssertDef.length; j++) {
-                        var bFoundSingle = false;
-                        var oAssertScope = {};
-                        var oAssert = oAssertDef[j];
-                        var sAssertLocalScope = this._attributeTypes[oAssert.attributeType].getAssertScope(oAssertScope);
-                        var oAssertSpec = this._getValueSpec(oAssert, aItemsEnhanced[i]);
-                        if (!oAssertSpec) {
-                            continue; //non valid line..
-                        }
-                        var sAssert = sAssertLocalScope + oAssertSpec.assert();
-                        var aSplit = sAssert.split(".");
-                        var oCurItem = aItemsEnhanced[i];
-                        var sCurrentError = "";
-                        for (var x = 0; x < aSplit.length; x++) {
-                            if (typeof oCurItem[aSplit[x]] === "undefined") {
-                                bFoundSingle = true;
-                                break;
-                            }
-                            oCurItem = oCurItem[aSplit[x]];
-                        }
-                        if (bFoundSingle === false) {
-                            //depending on the operator, all ok or nothing ok :-)
-                            if (oAssert.operatorType === "EQ" && oAssert.criteriaValue !== oCurItem) {
-                                bFoundSingle = true;
-                                sCurrentError = "Value " + oAssert.criteriaValue + " of " + sAssert + " does not match " + oCurItem;
-                            } else if (oAssert.operatorType === "NE" && oAssert.criteriaValue === oCurItem) {
-                                bFoundSingle = true;
-                                sCurrentError = "Value " + oAssert.criteriaValue + " of " + sAssert + " does match " + oCurItem;
-                            } else if (oAssert.operatorType === "CP" || oAssert.operatorType === "NP") {
-                                //convert both to string if required..
-                                var sStringContains = oAssert.criteriaValue;
-                                var sStringCheck = oCurItem;
-                                if (typeof sStringCheck !== "string") {
-                                    sStringCheck = sStringCheck.toString();
-                                }
-                                if (typeof sStringContains !== "string") {
-                                    sStringContains = sStringContains.toString();
-                                }
-                                if (sStringCheck.indexOf(sStringContains) === -1 && oAssert.operatorType === "CP") {
-                                    bFoundSingle = true;
-                                } else if (sStringCheck.indexOf(sStringContains) !== -1 && oAssert.operatorType === "NP") {
-                                    bFoundSingle = true;
-                                }
-                            }
-                        }
-                        oAssert.assertionOK = bFoundSingle === false;
-                        if (bFoundSingle === true) {
-                            bFound = true;
-                            aAllErrors.push({
-                                description: sCurrentError,
-                                title: "Assertion Error",
-                                subtitle: sCurrentError,
-                                type: "Error"
-                            });
-                        }
-                    }
-                    aItemsEnhanced[i].assertMessages = aAllErrors;
-                    aItemsEnhanced[i].assertionOK = bFound === false;
-                }
+                var oItem = this._removeNonSerializable(this._getElementInformation(aItems[i], aItems[i].getDomRef(), true));
+                aItemsEnhanced.push(oItem);
             }
             return aItemsEnhanced;
         };
@@ -1038,110 +562,78 @@ else {
             return "{ " + this._getSelectorToJSONStringRec(oObject) + " }";
         };
 
-        TestHandler.prototype.onRunSupportAssistant = function () {
-            this._runSupportAssistantForSelElement();
-        };
+        TestHandler.prototype._runSupportAssistant = function (oComponent) {
+            return new Promise(function (resolve, reject) {
+                var oSupSettings = oComponent.rules;
+                var sComponent = oComponent.component;
 
-        TestHandler.prototype._runSupportAssistantForSelElement = function () {
-            var oItem = this._oModel.getProperty("/element/item");
-            var sComp = _getOwnerComponent(oItem.control);
-            if (!sComp) {
-                return;
-            }
-
-            this._runSupportAssistant(sComp);
-        };
-
-        TestHandler.prototype._runSupportAssistant = function (sComponent) {
-            var oSupSettings = this._oModel.getProperty("/element/property/supportAssistant");
-            this._oDialog.setBusy(true);
-            sap.ui.require(["sap/ui/support/Bootstrap"], function (Bootstrap) {
-                Bootstrap.initSupportRules(["silent"]);
-                //librarys is an array of libName & ruleId
-                /* libName: "sap.ui.core"
-                    ruleId: "asynchronousXMLViews" */
-                var aExclude = oSupSettings.supportRules;
-                var aListAll = this._oModel.getProperty("/statics/supportRules");
-                for (var i = 0; i < aExclude.length; i++) {
-                    var sLib = aExclude[i].split("/")[0];
-                    var sRuleId = aExclude[i].split("/")[1];
-                    for (var j = 0; j < aListAll.length; j++) {
-                        if (aListAll[j].libName === sLib &&
-                            aListAll[j].ruleId === sRuleId) {
-                            aListAll = aListAll.splice(j, 1);
-                            break;
+                sap.ui.require(["sap/ui/support/Bootstrap"], function (Bootstrap) {
+                    Bootstrap.initSupportRules(["silent"]);
+                    var aExclude = oSupSettings.supportRules;
+                    var aListAll = this._oModel.getProperty("/statics/supportRules");
+                    for (var i = 0; i < aExclude.length; i++) {
+                        var sLib = aExclude[i].split("/")[0];
+                        var sRuleId = aExclude[i].split("/")[1];
+                        for (var j = 0; j < aListAll.length; j++) {
+                            if (aListAll[j].libName === sLib &&
+                                aListAll[j].ruleId === sRuleId) {
+                                aListAll = aListAll.splice(j, 1);
+                                break;
+                            }
                         }
                     }
-                }
 
-                setTimeout(function () {
-                    jQuery.sap.support.analyze({
-                        type: "components",
-                        components: [sComponent]
-                    }, aListAll.length > 0 ? aListAll : undefined).then(function () {
-                        this._oDialog.setBusy(false);
-                        var aIssues = jQuery.sap.support.getLastAnalysisHistory();
-                        var aStoreIssue = [];
-                        for (var i = 0; i < aIssues.issues.length; i++) {
-                            var oIssue = aIssues.issues[i];
-                            if (oSupSettings.ignoreGlobal === true && oIssue.context.id === "WEBPAGE") {
-                                continue;
+                    setTimeout(function () {
+                        jQuery.sap.support.analyze({
+                            type: "components",
+                            components: [sComponent]
+                        }, aListAll.length > 0 ? aListAll : undefined).then(function () {
+                            var aIssues = jQuery.sap.support.getLastAnalysisHistory();
+                            var aStoreIssue = [];
+                            for (var i = 0; i < aIssues.issues.length; i++) {
+                                var oIssue = aIssues.issues[i];
+                                if (oSupSettings.ignoreGlobal === true && oIssue.context.id === "WEBPAGE") {
+                                    continue;
+                                }
+                                var sState = "Error";
+                                var iPrio = 3;
+                                if (oIssue.severity === "Medium") {
+                                    sState = "Warning";
+                                    iPrio = 2;
+                                } else if (oIssue.severity === "Low") {
+                                    sState = "None";
+                                    iPrio = 1;
+                                }
+                                aStoreIssue.push({
+                                    severity: oIssue.severity,
+                                    details: oIssue.details,
+                                    context: oIssue.context.id,
+                                    rule: oIssue.rule.id,
+                                    ruleText: oIssue.rule.description,
+                                    state: sState,
+                                    importance: iPrio
+                                });
                             }
-                            var sState = "Error";
-                            var iPrio = 3;
-                            if (oIssue.severity === "Medium") {
-                                sState = "Warning";
-                                iPrio = 2;
-                            } else if (oIssue.severity === "Low") {
-                                sState = "None";
-                                iPrio = 1;
-                            }
-                            aStoreIssue.push({
-                                severity: oIssue.severity,
-                                details: oIssue.details,
-                                context: oIssue.context.id,
-                                rule: oIssue.rule.id,
-                                ruleText: oIssue.rule.description,
-                                state: sState,
-                                importance: iPrio
+
+                            aStoreIssue = aStoreIssue.sort(function (aObj, bObj) {
+                                if (aObj.importance <= bObj.importance) {
+                                    return 1;
+                                }
+                                return -1;
                             });
-                        }
-
-                        aStoreIssue = aStoreIssue.sort(function (aObj, bObj) {
-                            if (aObj.importance <= bObj.importance) {
-                                return 1;
-                            }
-                            return -1;
-                        });
-
-                        this._oModel.setProperty("/element/supportAssistantResult", aStoreIssue);
-                        this._oModel.setProperty("/element/supportAssistantResultLength", aStoreIssue.length);
-
-                        if (this._oModel.getProperty("/statics/supportRules").length === 0) {
                             var oLoader = sap.ui.require("sap/ui/support/supportRules/RuleSetLoader");
                             var aRules = [];
                             if (oLoader) { //only as of 1.52.. so ignore that for the moment
                                 aRules = oLoader.getAllRuleDescriptors();
-                            } else {
-                                //check is dumb and internal - du not take over..
-                                /*
-                                oLoader = sap.ui.require("sap/ui/support/supportRules/Main");
-                                if (oLoader && oLoader._mRuleSets ) {
-                                    for (var sRuleId in oLoader._mRuleSets ) {
-                                        for ( var s )
-                                        aRules.push({
-                                            libName: oLoader._mRuleSets[sRuleId].libName,
-                                            ruleId: sRuleId
-                                        });
-                                    }
-                                }*/
                             }
-                            this._oModel.setProperty("/statics/supportRules", aRules);
-                        }
 
-                        this._updatePreview();
-                    }.bind(this));
-                }.bind(this), 0);
+                            resolve({
+                                results: aStoreIssue,
+                                rules: aRules
+                            });
+                        }.bind(this));
+                    }.bind(this), 0);
+                }.bind(this));
             }.bind(this));
         };
 
@@ -1239,13 +731,13 @@ else {
                 sCode = sCode + ");";
                 aCode = [sCode];
             } else if (sType === 'ASS') {
-                if (oElement.assertion.assertType === "ATTR" ) {
+                if (oElement.assertion.assertType === "ATTR") {
                     for (var i = 0; i < oElement.assertion.assertCode.length; i++) {
                         var oAss = oElement.assertion.assertCode[i];
 
                         // we could make 100 of mock methods here to make that more OPA style.. but...ya..
                         sCode = "Then." + sCurrentPage + ".theExpactationIs(" + sSelectorFinal + ",'" + oAss.assertLocation + "','" + oAss.assertType + "',";
-                        
+
                         if (typeof oAss.assertValue === "boolean") {
                             sCode += oAss.assertValue;
                         } else if (typeof oAss.assertValue === "number") {
@@ -1257,7 +749,7 @@ else {
 
                         aCode.push(sCode);
                     }
-                } else if ( oElement.assertion.assertType === "EXS" ) {
+                } else if (oElement.assertion.assertType === "EXS") {
                     sCode = "Then." + sCurrentPage + ".theElementIsExisting(" + sSelectorFinal + ");"
                     aCode = [sCode];
                 } else if (oElement.assertion.assertType === "MTC") {
@@ -1394,9 +886,6 @@ else {
             this._setItem(oCurrentId, oCurrentId.getDomRef());
         };
 
-        TestHandler.prototype.onUpdatePreview = function () {
-            this._updatePreview();
-        };
 
         TestHandler.prototype.onTypeChange = function () {
             sap.ui.core.Fragment.byId("testDialog", "atrElementsPnl").setExpanded(false);
@@ -1406,24 +895,7 @@ else {
             if (this._oModel.getProperty("/element/property/type") === "SUP") {
                 this._runSupportAssistantForSelElement();
             }
-
-            //update preview
-            this._updatePreview();
         };
-
-        TestHandler.prototype._suspendPerformanceBindings = function () {
-            sap.ui.core.Fragment.byId("testDialog", "idAttributeTable").getBinding("items").suspend();
-            sap.ui.core.Fragment.byId("testDialog", "idAssertionTable").getBinding("items").suspend();
-            sap.ui.core.Fragment.byId("testDialog", "tblIdentifiedElements").getBinding("items").suspend();
-            sap.ui.core.Fragment.byId("testDialog", "tblPerformedSteps").getBinding("items").suspend();
-        }
-        TestHandler.prototype._resumePerformanceBindings = function () {
-            sap.ui.core.Fragment.byId("testDialog", "idAttributeTable").getBinding("items").resume();
-            sap.ui.core.Fragment.byId("testDialog", "idAssertionTable").getBinding("items").resume();
-            sap.ui.core.Fragment.byId("testDialog", "tblIdentifiedElements").getBinding("items").resume();
-            sap.ui.core.Fragment.byId("testDialog", "tblPerformedSteps").getBinding("items").resume();
-            sap.ui.core.Fragment.byId("testDialog", "attrObjectStatus").getBinding("text").refresh(true);
-        }
 
         TestHandler.prototype._getPropertiesInArray = function (oObj) {
             var i = 0;
@@ -1591,13 +1063,23 @@ else {
         }
 
         TestHandler.prototype._setItem = function (oControl, oDomNode, oOriginalDomNode) {
-            this._suspendPerformanceBindings();
-
             var oItem = this._getElementInformation(oControl, oDomNode);
             oItem = this._setUniqunessInformation(oItem);
             oOriginalDomNode = oOriginalDomNode ? oOriginalDomNode : oDomNode;
             oItem.aggregationArray = [];
             oItem.parents = [];
+            oItem.identifier.domIdOriginal = oOriginalDomNode.id;
+
+            var aNode = this._getAllChildrenOfDom(oItem.control.getDomRef(), oItem.control);
+            oItem.children = [];
+
+            for (var i = 0; i < aNode.length; i++) {
+                oItem.children.push({
+                    isInput: $(aNode[i]).is("input") || $(aNode[i]).is("textarea"),
+                    domChildWith: aNode[i].id.substr(oItem.control.getId().length)
+                });
+            }
+
             for (var sKey in oItem.aggregation) {
                 oItem.aggregationArray.push(oItem.aggregation[sKey]);
             }
@@ -1618,17 +1100,7 @@ else {
                 $(this._oCurrentDomNode).addClass('HVRReveal');
             }
 
-            this._oModel.setProperty("/element/item", oItem);
-            this._oModel.setProperty("/element/attributeFilter", []);
-            this._oModel.setProperty("/element/assertFilter", []);
-
-            this._setValidAttributeTypes();
-            this._adjustDefaultSettings(oItem, oDomNode, oOriginalDomNode);
-            this._updateValueState(oItem);
-            this._updateSubActionTypes(true);
-            this._updatePreview();
-
-            this._resumePerformanceBindings();
+            return oItem;
         };
 
         TestHandler.prototype._setValidAttributeTypes = function (oItem) {
@@ -1710,119 +1182,6 @@ else {
             return $.extend(true, [], aReturn);
         };
 
-        TestHandler.prototype._adjustDefaultSettings = function (oItem, oDom, oDomOriginal) {
-            var oMerged = this._getMergedClassArray(oItem);
-
-            var sStringDomNodeOriginal = oDomOriginal.id.substr(oItem.control.getId().length);
-            if (oMerged.defaultAction[sStringDomNodeOriginal]) {
-                this._oModel.setProperty("/element/property/actKey", oMerged.defaultAction[sStringDomNodeOriginal].action);
-                this._oModel.setProperty("/element/property/domChildWith", sStringDomNodeOriginal);
-            } else {
-                this._oModel.setProperty("/element/property/actKey", oMerged.defaultAction[""].action);
-                this._oModel.setProperty("/element/property/domChildWith", "");
-            }
-
-            if (oItem.identifier.idGenerated === true || oItem.identifier.idCloned === true) {
-                this._oModel.setProperty("/element/property/selectItemBy", "ATTR");
-            } else {
-                this._oModel.setProperty("/element/property/selectItemBy", "UI5");
-            }
-
-            if (this._getFoundElements().length > 1 && this._oModel.setProperty("/element/property/selectItemBy") === "UI5") {
-                this._oModel.setProperty("/element/property/selectItemBy", "ATTR"); //change to attributee in case id is not sufficient..
-            }
-
-            this._findBestAttributeDefaultSetting(oItem, false);
-
-            //adjust DOM node for action type "INP"..
-            this._adjustDomChildWith(oItem);
-        };
-
-        TestHandler.prototype._findBestAttributeDefaultSetting = function (oItem, bForcePopup) {
-            this._adjustAttributeDefaultSetting(oItem);
-
-            //in case we still have >1 item - change to
-            if (this._oModel.getProperty("/element/property/selectItemBy") === "ATTR" &&
-                ((this._getFoundElements().length > 1 && this._oModel.getProperty("/element/property/type") === 'ACT') || bForcePopup === true)) {
-                //ok - we are still not ready - let's check if we are any kind of item, which is requiring the user to ask for binding context information..
-                //work on our binding context information..
-                var oItem = this._oModel.getProperty("/element/item");
-                var aList = [];
-                if (!jQuery.isEmptyObject(oItem.context)) {
-                    for (var sModel in oItem.context) {
-                        for (var sAttribute in oItem.context[sModel]) {
-                            if (typeof oItem.context[sModel][sAttribute] !== "object") {
-                                aList.push({
-                                    type: "BDG",
-                                    typeTxt: "Context",
-                                    bdgPath: sModel + "/" + sAttribute,
-                                    attribute: sAttribute,
-                                    value: oItem.context[sModel][sAttribute],
-                                    importance: oItem.uniquness.context[sModel][sAttribute],
-                                    valueToString: oItem.context[sModel][sAttribute].toString ? oItem.context[sModel][sAttribute].toString() : oItem.context[sModel][sAttribute]
-                                });
-                            }
-                        }
-                    }
-                }
-                if (!jQuery.isEmptyObject(oItem.binding)) {
-                    for (var sAttr in oItem.binding) {
-                        if (typeof oItem.binding[sAttr].path !== "object") {
-                            aList.push({
-                                type: "BNDG",
-                                typeTxt: "Binding",
-                                bdgPath: sAttr,
-                                attribute: sAttr,
-                                importance: oItem.uniquness.binding[sAttr],
-                                value: oItem.binding[sAttr].path,
-                                valueToString: oItem.binding[sAttr].path
-                            });
-                        }
-                    }
-                }
-                if (!jQuery.isEmptyObject(oItem.property)) {
-                    for (var sAttr in oItem.property) {
-                        if (typeof oItem.property[sAttr] !== "object") {
-                            aList.push({
-                                type: "ATTR",
-                                typeTxt: "Property",
-                                bdgPath: sAttr,
-                                attribute: sAttr,
-                                importance: oItem.uniquness.property[sAttr],
-                                value: oItem.property[sAttr],
-                                valueToString: oItem.property[sAttr].toString ? oItem.property[sAttr].toString() : oItem.property[sAttr]
-                            });
-                        }
-                    }
-                }
-                var oMerged = this._getMergedClassArray(oItem);
-                this._oModel.setProperty("/element/itemCloned", oMerged.cloned);
-                if (oMerged.cloned === true) {
-                    aList = aList.sort(function (aObj, bObj) {
-                        if (aObj.importance <= bObj.importance) {
-                            return 1;
-                        }
-                        return -1;
-                    });
-                }
-
-                for (var i = 0; i < aList.length; i++) {
-                    aList[i].numberState = "Error";
-                    if (aList[i].importance >= 80) {
-                        aList[i].numberState = "Success";
-                    } else if (aList[i].importance >= 60) {
-                        aList[i].numberState = "Warning";
-                    }
-                }
-                if (aList.length > 0) {
-                    this._oModel.setProperty("/element/possibleContext", aList);
-                    this._oTableContext.removeSelections();
-                    this._oSelectDialog.setModel(this._oModel, "viewModel")
-                    this._oSelectDialog.open();
-                }
-            }
-        };
-
         TestHandler.prototype._adjustDomChildWith = function (oItem) {
             var oMerged = this._getMergedClassArray(oItem);
             //check if there is any preferred action, and that action is actually available..
@@ -1886,12 +1245,6 @@ else {
             }
             this._oModel.setProperty("/idQualityState", sState);
             this._oModel.setProperty("/idQualityStateText", sStateText);
-        };
-
-        TestHandler.prototype.onAddAttribute = function (oEvent) {
-            this._add("/element/attributeFilter");
-            sap.ui.core.Fragment.byId("testDialog", "atrElementsPnl").setExpanded(true);
-            this._updatePreview();
         };
 
         TestHandler.prototype.onRemoveAttribute = function (oEvent) {
@@ -1962,95 +1315,6 @@ else {
             }
         };
 
-        TestHandler.prototype._remove = function (aContext) {
-            if (!aContext || aContext.length !== 1) {
-                return;
-            }
-            for (var i = 0; i < aContext.length; i++) {
-                var sPath = aContext[i].getPath(); //e.g. /assertion/1/
-                sPath = sPath.substr(0, sPath.lastIndexOf("/"));
-                var aIndex = aContext[i].getPath().split("/");
-                var iIndex = aIndex[aIndex.length - 1];
-
-                var aProp = this._oModel.getProperty(sPath);
-                aProp.splice(iIndex, 1);
-                this._oModel.setProperty(sPath, aProp);
-            }
-
-            this._updatePreview();
-            this._getAttributeRating();
-        };
-
-        TestHandler.prototype._add = function (sPath, oTemplate) {
-            var aAttributes = this._oModel.getProperty(sPath);
-            oTemplate = typeof oTemplate === "undefined" ? {} : oTemplate;
-            aAttributes.push({
-                attributeType: oTemplate.attributeType ? oTemplate.attributeType : "OWN",
-                criteriaTypes: [],
-                criteriaType: oTemplate.criteriaType ? oTemplate.criteriaType : "MTA",
-                subCriteriaType: oTemplate.subCriteriaType ? oTemplate.subCriteriaType : "ELM",
-                criteriaValue: "",
-                operatorType: oTemplate.operatorType ? oTemplate.operatorType : "EQ"
-            });
-            this._oModel.setProperty(sPath, aAttributes);
-            this._updateAttributeTypes(this._oModel.getContext(sPath + "/" + (aAttributes.length - 1)));
-            this._getAttributeRating();
-        };
-
-        TestHandler.prototype.onAddAssertion = function (oEvent) {
-            //most certainly we want to "overwach" an attribute.. nothing else make too much sense..
-            this._add("/element/assertFilter", { attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "" });
-
-            this._updatePreview();
-        };
-
-        TestHandler.prototype.onAttributeTypeChanged = function (oEvent) {
-            var oCtx = oEvent.getSource().getBindingContext("viewModel");
-            this._updateAttributeTypes(oCtx);
-            this._updatePreview();
-        };
-        TestHandler.prototype.onCriteriaTypeChanged = function (oEvent) {
-            var oCtx = oEvent.getSource().getBindingContext("viewModel");
-            this._updateCriteriaType(oCtx);
-            this._updatePreview();
-        };
-        TestHandler.prototype.onSubCriteriaTypeChanged = function (oEvent) {
-            var oCtx = oEvent.getSource().getBindingContext("viewModel");
-            this._updateSubCriteriaType(oCtx);
-            this._updatePreview();
-        };
-
-        TestHandler.prototype._createActionPopover = function () {
-            if (!this._oPopoverAction) {
-                this._oPopoverAction = sap.ui.xmlfragment({
-                    fragmentContent: this._sXMLPageActionSettings,
-                    fragmentName: "testActionSettings",
-                    id: "testActionSettings"
-                }, this);
-                this._oPopoverAction.setModel(this._oModel, "viewModel");
-                this._oPopoverAction.attachBeforeClose(function () {
-                    this._updatePreview();
-                }.bind(this));
-            }
-        };
-
-        TestHandler.prototype._createDialog = function () {
-            if (!this._oDialog) {
-                this._oDialog = sap.ui.xmlfragment({
-                    fragmentContent: this._sXMLPage,
-                    fragmentName: "testDialog",
-                    id: "testDialog"
-                }, this);
-                this._oDialog.setModel(this._oModel, "viewModel");
-                this._oDialog.attachBeforeClose(null, function () {
-                    if (this._oCurrentDomNode) {
-                        $(this._oCurrentDomNode).removeClass('HVRReveal');
-                    }
-                    $(".HVRReveal").removeClass('HVRReveal');
-                    this._bDialogActive = false;
-                }.bind(this));
-            }
-        };
         TestHandler.prototype.onClick = function (oDomNode, bAssertion) {
             var oControl = this._getControlFromDom(oDomNode);
             if (!oControl) {
@@ -2060,18 +1324,8 @@ else {
             var oOriginalDomNode = oDomNode;
             oDomNode = oControl.getDomRef();
             $(oDomNode).addClass('HVRReveal');
-            this._createDialog();
-
-            this._oModel.setProperty("/element", JSON.parse(JSON.stringify(this._oModel.getProperty("/elementDefault"))));
-            if (bAssertion === true) {
-                this._oModel.setProperty("/element/property/type", "ASS");
-            }
-            this._oModel.setProperty("/selectMode", true);
-            sap.ui.core.Fragment.byId("testDialog", "atrElementsPnl").setExpanded(false);
-            this._bShowCodeOnly = false;
-            this._bDialogActive = true;
             this._resetCache();
-            this._oDialog.open();
+
 
             //in case we are actually a "local-id", and we do NOT have "sParentAggregationName" set, and our parent is undefined
             //this means that we are actually a dumbshit (100% depending) child control - we will move up in that case..
@@ -2083,19 +1337,33 @@ else {
                     oDomNode = oControl.getDomRef();
                 }
             }
-            this._setItem(oControl, oDomNode, oOriginalDomNode);
 
-            //in case we are in "TYP" after opening, set focus to input field..
-            var oInput = sap.ui.core.Fragment.byId("testDialog", "inpTypeText");
-            var oConfirm = sap.ui.core.Fragment.byId("testDialog", "btSave");
-            if (this._oModel.getProperty("/element/property/actKey") === "TYP") {
-                this._oDialog.setInitialFocus(oInput);
-            } else {
-                //if rating = 5 --> save
-                if (this._oModel.getProperty("/element/ratingOfAttributes") === 5) {
-                    this._oDialog.setInitialFocus(oConfirm);
-                }
+            var oItem = this._setItem(oControl, oDomNode, oOriginalDomNode);
+            //remove the "non-serializable" data..
+
+            this.fireEventToContent("itemSelected", this._removeNonSerializable(oItem));
+        };
+
+        TestHandler.prototype._removeNonSerializable = function (oItem) {
+            this._removeNonSerializableData(oItem);
+            this._removeNonSerializableData(oItem.parent);
+            this._removeNonSerializableData(oItem.parentL2);
+            this._removeNonSerializableData(oItem.parentL3);
+            this._removeNonSerializableData(oItem.parentL4);
+            this._removeNonSerializableData(oItem.label);
+            this._removeNonSerializableData(oItem.itemdata);
+            for (var i = 0; i < oItem.parents.length; i++) {
+                this._removeNonSerializableData(oItem.parents[i]);
             }
+            return oItem;
+        };
+
+        TestHandler.prototype._removeNonSerializableData = function (oItem) {
+            if (!oItem) {
+                return;
+            }
+            delete oItem.control;
+            delete oItem.dom;
         };
 
         TestHandler.prototype._resetCache = function () {
@@ -2125,21 +1393,13 @@ else {
         TestHandler.prototype._start = function () {
             this._bActive = true;
             this._bStarted = true;
+            $(".HVRReveal").removeClass('HVRReveal');
         };
         TestHandler.prototype._stop = function () {
             this._bActive = false;
             this._bStarted = false;
             $(".HVRReveal").removeClass('HVRReveal');
-        };
-
-        TestHandler.prototype.showCode = function (sId) {
-            this._bActive = false;
-            this._bShowCodeOnly = true;
-            this._oModel.setProperty("/selectMode", false);
-            this._createDialog();
-            this._oDialog.open();
-            this._updatePreview();
-            $(".HVRReveal").removeClass('HVRReveal');
+            this.fireEventToContent("stopped");
         };
 
         TestHandler.prototype.startFor = function (sId) {
@@ -2151,9 +1411,7 @@ else {
             this.onClick(oElement, false);
         };
 
-        TestHandler.prototype.init = function (sXMLPage, sXMLPageActionSettings) {
-            this._sXMLPage = sXMLPage;
-            this._sXMLPageActionSettings = sXMLPageActionSettings;
+        TestHandler.prototype.init = function () {
             $(document).ready(function () {
                 var that = this;
 
@@ -2792,7 +2050,7 @@ else {
                     getItem: function (oItem) { return oItem; },
                     getScope: function (oScope) { return oScope; },
                     getAssertScope: function () { return "" },
-                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MTA"], this._criteriaTypes["MODL"], this._criteriaTypes["AGG"], this._criteriaTypes["BNDG"] , this._criteriaTypes["VIW"]]
+                    criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MTA"], this._criteriaTypes["MODL"], this._criteriaTypes["AGG"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
                 },
                 "VIW": {
                     getItem: function (oItem) { return this._getParentWithDom(oItem, 1, true); }.bind(this),
@@ -3294,8 +2552,8 @@ else {
         }
 
         if (id.viewProperty) {
-            var oView = _getParentWithDom(oItem,1,true);
-            if ( !oView ) {
+            var oView = _getParentWithDom(oItem, 1, true);
+            if (!oView) {
                 return false;
             }
 
@@ -3304,7 +2562,7 @@ else {
             if (sViewNameLocal.length) {
                 sViewNameLocal = sViewNameLocal.charAt(0).toUpperCase() + sViewNameLocal.substring(1);
             }
-                
+
             if (id.viewProperty.viewName && id.viewProperty.viewName !== sViewName) {
                 return false;
             }
@@ -3443,6 +2701,7 @@ else {
             model: {},
             metadata: {},
             viewProperty: {},
+            classArray: [],
             identifier: { domId: "", ui5Id: "", idCloned: false, idGenerated: false, ui5LocalId: "", localIdClonedOrGenerated: false, ui5AbsoluteId: "" },
             control: null,
             dom: null
@@ -3464,6 +2723,15 @@ else {
         oReturn.identifier.ui5Id = _getUi5Id(oItem);
         oReturn.identifier.ui5LocalId = _getUi5LocalId(oItem);
 
+
+        oReturn.classArray = [];
+        var oMeta = oItem.getMetadata();
+        while (oMeta) {
+            oReturn.classArray.push({
+                elementName: oMeta._sClassName
+            });
+            oMeta = oMeta.getParent();
+        }
 
         //does the ui5Id contain a "-" with a following number? it is most likely a dependn control (e.g. based from aggregation or similar)
         if (RegExp("([A-Z,a-z,0-9])-([0-9])").test(oReturn.identifier.ui5Id) === true) {
@@ -3620,8 +2888,7 @@ else {
                 oAggregationInfo.rows.push({
                     context: fnGetContexts(aAggregation[i]),
                     ui5Id: _getUi5Id(aAggregation[i]),
-                    ui5AbsoluteId: aAggregation[i].getId(),
-                    control: aAggregation[i]
+                    ui5AbsoluteId: aAggregation[i].getId()
                 });
             }
             oReturn.aggregation[oAggregationInfo.name] = oAggregationInfo;
