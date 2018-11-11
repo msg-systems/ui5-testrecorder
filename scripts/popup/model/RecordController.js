@@ -8,18 +8,37 @@ sap.ui.define([
     "use strict";
 
     var RecordController = Object.extend("com.ui5.testing.model.RecordController", {
-        constructor: function() {
+        constructor: function () {
             var oJSON = {
                 recording: false
             };
             this._oModel = new JSONModel(oJSON);
             this._sTabId = "";
+            this._sLastTabId = "";
             this._oInitializedPromise = null;
             this._oComponent = null;
             Communication.registerEvent("stopped", this._onStopped.bind(this));
             Communication.registerEvent("loaded", this._onInjectionDone.bind(this));
+            this._oURLPopover = this._oRecordDialog = sap.ui.xmlfragment(
+                "com.ui5.testing.view.SelectURL",
+                this
+            );
+            this._oURLPopover.setModel(this._oModel, "viewModel");
         }
     });
+
+    RecordController.prototype.focusPopup = function () {
+        if (Communication.getOwnWindowId()) {
+            chrome.windows.update(Communication.getOwnWindowId(), { focused: true });
+        }
+    };
+
+    RecordController.prototype.focusTargetWindow = function () {
+        chrome.tabs.update(this._sTabId, { "active": true }, function (tab) { });
+        chrome.tabs.get(this._sTabId, function (tab) {
+            chrome.windows.update(tab.windowId, { focused: true });
+        });
+    };
 
     RecordController.prototype.getModel = function () {
         return this._oModel;
@@ -29,14 +48,17 @@ sap.ui.define([
         this._oComponent = oComponent;
     };
 
-    RecordController.prototype.startRecording = function() {
+    RecordController.prototype.startRecording = function () {
         Communication.fireEvent("start");
         this._oModel.setProperty("/recording", true);
-        chrome.tabs.update(this._sTabId, { "active": true }, function (tab) { });
+        this.focusTargetWindow();
     };
 
     RecordController.prototype.stopRecording = function () {
-        Communication.fireEvent("stop");
+        if (this._oModel.getProperty("/recording") === true) {
+            Communication.fireEvent("stop");
+            Communication.fireEvent("unlock");
+        }
     };
 
     RecordController.prototype._onStopped = function (oData) {
@@ -47,7 +69,7 @@ sap.ui.define([
     RecordController.prototype._onInjectionDone = function (oData) {
         if (oData.ok === true) {
             this._oInitPromiseResolve();
-            window.onbeforeunload = function() {
+            window.onbeforeunload = function () {
                 //inform our window, to clean up!
                 this.stopRecording();
             }.bind(this);
@@ -55,9 +77,63 @@ sap.ui.define([
         } else {
             MessageToast.show("Initialization for " + this._sCurrentURL + " failed. UI5 is not used on that page.");
             this._oInitPromiseReject();
-            this._oInitPromiseReject = null;
+            this._oInitializedPromise = null;
         }
     };
+
+    RecordController.prototype._checkWindowLifecycle = function () {
+        chrome.tabs.onRemoved.addListener(function (tabId, info) {
+            if (tabId === this._sTabId) {
+                //user has stopped in our tab.. inform that this was probably a bad idea (in case we are recording)
+                this._oModel.setProperty("/recording", false);
+                sap.ui.getCore().getEventBus().publish("RecordController", "windowFocusLost", {
+                });
+            }
+        }.bind(this));
+    };
+
+    RecordController.prototype._injectIntoTab = function (sTabId, sUrl) {
+        chrome.tabs.sendMessage(sTabId, { type: "ui5-check-if-injected" }, function (response) {
+            this._sTabId = sTabId;
+            this._sLastTabId = this._sTabId;
+            this._sCurrentURL = sUrl;
+            if (typeof response === "undefined" || typeof response.injected === "undefined") {
+                chrome.tabs.executeScript(this._sTabId, {
+                    file: '/scripts/content/ui5Testing.js'
+                }, function () {
+                    if (chrome.runtime.lastError) {
+                        MessageToast.show("Initialization for " + this._sCurrentURL + " failed. Please restart the Addon.");
+                        this._oInitializedPromise = null;
+                    }
+                });
+                Communication.register(this._sTabId);
+            } else {
+                //we are already injected.. no need to register or do anything..
+                Communication.register(this._sTabId);
+                this._oInitPromiseResolve();
+            }
+        }.bind(this));
+    };
+
+    RecordController.prototype.onHandleClose = function (oEvent) {
+        var aContexts = oEvent.getParameter("selectedContexts");
+        if (aContexts && aContexts.length) {
+            var oObject = aContexts[0].getObject();
+            this._injectIntoTab(oObject.id, oObject.url);
+        } else {
+            MessageToast.show("No URL was selected - no Recording will start");
+            this._oInitPromiseReject();
+            this._oInitializedPromise = null;
+        }
+    };
+
+    RecordController.prototype.initializePromises = function () {
+        this._oInitializedPromise = new Promise(function (resolve, reject) {
+            this._oInitPromiseResolve = resolve;
+            this._oInitPromiseReject = reject;
+        }.bind(this));
+    };
+
 
     RecordController.prototype.injectScript = function () {
         var that = this;
@@ -70,27 +146,32 @@ sap.ui.define([
                 this._oInitPromiseResolve = resolve;
                 this._oInitPromiseReject = reject;
                 chrome.tabs.query({ active: true, currentWindow: false }, function (tabs) {
-                    //check if we area already registered..
-                    chrome.tabs.sendMessage(tabs[0].id, { type: "ui5-check-if-injected" }, function (response) {
-                        that._sTabId = tabs[0].id;
-                        that._sCurrentURL = tabs[0].url;
-                        if (typeof response === "undefined" || typeof response.injected === "undefined") {
-                            chrome.tabs.executeScript(that._sTabId, {
-                                file: '/scripts/content/ui5Testing.js'
-                            }, function() {
-                                if (chrome.runtime.lastError) {
-                                    MessageToast.show("Initialization for " + url + " failed. Please restart the Addon.");
-                                    that._oInitializedPromise = null;
-                                }
+                    var aData = [];
+                    for (var i = 0; i < tabs.length; i++) {
+                        if (tabs[i].url) {
+                            aData.push({
+                                url: tabs[i].url,
+                                id: tabs[i].id
                             });
-                            Communication.register(that._sTabId);
-                        } else {
-                            Communication.register(that._sTabId);
                         }
-                    });
+                    }
+                    if (aData.length === 0) {
+                        MessageToast.show("There is no tab, which can be used for recording");
+                        reject();
+                        return;
+                    }
+                    if (aData.length > 1) {
+                        that._oModel.setProperty("/urls", aData);
+                        that._oURLPopover.open();
+                    } else {
+                        that._injectIntoTab(aData[0].id, aData[0].url);
+                    }
                 });
             }.bind(this));
-            this._oInitializedPromise.then(resolve, reject);
+            this._oInitializedPromise.then(resolve, function () {
+                reject();
+                this._oInitPromiseReject = null;
+            }.bind(this));
         }.bind(this))
     }
 

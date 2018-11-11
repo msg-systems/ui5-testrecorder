@@ -7,40 +7,31 @@
     xmlns:u="sap.ui.unified" 
     xmlns:semantic="sap.m.semantic" 
     xmlns:core="sap.ui.core">
-    <semantic:FullscreenPage navButtonPress="onNavBack" showSubHeader="true" showNavButton="true" title="Add Step" busy="{viewModel>/busy}">
+    <semantic:FullscreenPage navButtonPress="onNavBack" showSubHeader="false" title="{viewModel>/element/item/identifier/ui5Id}" showNavButton="true" busy="{viewModel>/busy}">
         <semantic:customHeaderContent>
-            <Bar>
-                <contentMiddle>
-                    <Title text="{viewModel>/element/item/identifier/ui5Id}"/>
-                </contentMiddle>
-                <contentRight>
-                    <ToggleButton icon="sap-icon://resize" pressed="{viewModel>/isStretched}"/>
-
-                    <MenuButton text="Navigate from Item" buttonMode="Regular">
-                        <menu>
-                            <Menu itemSelected="onMenuAction">
+            <MenuButton text="Navigate from Item" buttonMode="Regular">
+                <menu>
+                    <Menu itemSelected="onMenuAction">
+                        <items>
+                            <MenuItem text="Parent" items="{viewModel>/element/item/parents}">
                                 <items>
-                                    <MenuItem text="Parent" items="{viewModel>/element/item/parents}">
-                                        <items>
-                                            <MenuItem text="{viewModel>identifier/ui5Id}" press="onSelectItem"/>
-                                        </items>
-                                    </MenuItem>
+                                    <MenuItem text="{viewModel>identifier/ui5Id}" press="onSelectItem"/>
+                                </items>
+                            </MenuItem>
 
-                                    <MenuItem text="Aggregations" items="{ path: 'viewModel>/element/item/aggregationArray', filters: [{ path: 'length', operator: 'NE', value1: 0 }] }">
+                            <MenuItem text="Aggregations" items="{ path: 'viewModel>/element/item/aggregationArray', filters: [{ path: 'length', operator: 'NE', value1: 0 }] }">
+                                <items>
+                                    <MenuItem text="{viewModel>name}" items="{viewModel>rows}">
                                         <items>
-                                            <MenuItem text="{viewModel>name}" items="{viewModel>rows}">
-                                                <items>
-                                                    <MenuItem text="{viewModel>ui5Id}" press="onSelectItem"/>
-                                                </items>
-                                            </MenuItem>
+                                            <MenuItem text="{viewModel>ui5Id}" press="onSelectItem"/>
                                         </items>
                                     </MenuItem>
                                 </items>
-                            </Menu>
-                        </menu>
-                    </MenuButton>
-                </contentRight>
-            </Bar>
+                            </MenuItem>
+                        </items>
+                    </Menu>
+                </menu>
+            </MenuButton>
         </semantic:customHeaderContent>
 
         <semantic:content>
@@ -48,7 +39,7 @@
                 <headerToolbar>
                     <Toolbar height="3rem" style="Clear">
                         <ToolbarSpacer/>
-                        <Button id="btClose" type="Reject" text="Cancel Step" press="_onClose"/>
+                        <Button id="btClose" type="Reject" text="Cancel Step" press="_onCancelStep"/>
                         <Button id="btSave" type="Accept" text="Save Step" press="_onSave"/>
                     </Toolbar>
                 </headerToolbar>
@@ -330,7 +321,7 @@
             </Panel>
         </semantic:content>
         <semantic:customFooterContent>
-            <Button id="btCloseFt" type="Reject" text="Cancel Step" press="_onClose"/>
+            <Button id="btCloseFt" type="Reject" text="Cancel Step" press="_onCancelStep"/>
             <Button id="btSaveFt" type="Accept" text="Save Step" press="_onSave"/>
         </semantic:customFooterContent>
     </semantic:FullscreenPage>

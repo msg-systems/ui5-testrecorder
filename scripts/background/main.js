@@ -7,6 +7,18 @@ chrome.browserAction.onClicked.addListener(function (tab) {
 			tabId: tab.id,
 			type: 'popup',
 			focused: true
+		}, function (fnWindow) {
+			chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+				if (message.type === "HandshakeToWindow") {
+					chrome.runtime.sendMessage({
+						"type": "send-window-id",
+						"windowid" : fnWindow.id
+					}, function (response) {
+					});
+				}
+			});
+
 		});
+
 	});
 });

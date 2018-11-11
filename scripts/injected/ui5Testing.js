@@ -172,26 +172,52 @@ else {
                 codeLines: [] //currently maintained code-lines
             }),
             _bActive: false,
+            _bScreenLocked: false,
             _bStarted: false,
             constructor: function () {
                 this._getCriteriaTypes();
             }
         });
 
+        TestHandler.prototype.lockScreen = function () {
+            this._bScreenLocked = true;
+        };
+        TestHandler.prototype.unlockScreen = function () {
+            this._bScreenLocked = false;
+        };
+
         TestHandler.prototype.handleEvent = function (sEventType, oEventData) {
             if (sEventType === "start") {
                 this._start();
             } else if (sEventType === "stop") {
                 this._stop();
+            } else if (sEventType === "unlock") {
+                this.unlockScreen();
             } else if (sEventType === "find") {
                 return this._getFoundElements(oEventData);
             } else if (sEventType === "execute") {
                 this._executeAction(oEventData);
+            } else if (sEventType === "setWindowLocation" ) {
+                this._setWindowLocation(oEventData);
+            } else if (sEventType === "selectItem") {
+                this._selectItem(oEventData);
             } else if (sEventType === "runSupportAsssistant") {
                 return this._runSupportAssistant(oEventData);
             } else if (sEventType === "getwindowinfo") {
                 return this._getWindowInfo();
             }
+        };
+
+        TestHandler.prototype._setWindowLocation = function(oEventData) {
+            window.location.href = oEventData.url;
+        };
+
+        TestHandler.prototype._selectItem = function (oEventData) {
+            var oCtrl = sap.ui.getCore().byId(oEventData.element);
+            if (!oCtrl) {
+                return;
+            }
+            this.onClick(oCtrl.getDomRef());
         };
 
         TestHandler.prototype._getWindowInfo = function () {
@@ -230,7 +256,8 @@ else {
         };
 
         TestHandler.prototype._executeAction = function (oEventData) {
-            debugger;
+            this.unlockScreen();
+
             var oItem = oEventData.element;
             var oDom = this._getFinalDomNode(oItem);
 
@@ -260,9 +287,8 @@ else {
                 event.originalEvent = event; //self refer
                 oDom.get(0).dispatchEvent(event);
             } else if (oItem.property.actKey === "TYP") {
-                var e = jQuery.Event("keypress");
-                e.which = 13; // Enter
                 var sText = oItem.property.selectActInsert;
+                oDom.focus();
                 if (sText.length > 0 && oItem.property.actionSettings.replaceText === false) {
                     oDom.val(oDom.val() + sText);
                 } else {
@@ -637,194 +663,6 @@ else {
             }.bind(this));
         };
 
-        TestHandler.prototype._getSelectorDefinition = function (oElement) {
-            var oScope = {};
-            var sSelector = "";
-            var sSelectorAttributes = "";
-            var sSelectorAttributesStringified = null;
-            var sSelectorAttributesBtf = "";
-            var oItem = oElement.item;
-            var sActType = oElement.property.actKey; //PRS|TYP
-            var sSelectType = oElement.property.selectItemBy; //DOM | UI5 | ATTR
-            var sSelectorExtension = oElement.property.domChildWith;
-
-            if (sSelectType === "DOM") {
-                sSelector = "Selector";
-                sSelectorAttributes = '#' + oElement.item.identifier.domId + sSelectorExtension;
-                sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
-            } else if (sSelectType === "UI5") {
-                sSelector = "UI5Selector";
-                sSelectorAttributes = oElement.item.identifier.ui5Id + sSelectorExtension;
-                sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
-            } else if (sSelectType === "ATTR") {
-                sSelector = "UI5Selector";
-                var aAttributes = oElement.attributeFilter;
-                if (sSelectorExtension) {
-                    $.extend(true, oScope, {
-                        domChildWith: sSelectorExtension
-                    });
-                }
-
-                for (var i = 0; i < aAttributes.length; i++) {
-                    var oAttribute = aAttributes[i];
-                    //get the current item..
-                    var oItemLocal = this._attributeTypes[oAttribute.attributeType].getItem(oItem);
-                    var oSpec = this._getValueSpec(oAttribute, oItemLocal);
-                    if (oSpec === null) {
-                        continue;
-                    }
-                    //extent the current local scope with the code extensions..x
-                    var oScopeLocal = this._attributeTypes[oAttribute.attributeType].getScope(oScope);
-                    $.extend(true, oScopeLocal, oSpec.code(oAttribute.criteriaValue));
-                }
-
-                sSelectorAttributes = oScope;
-                sSelectorAttributesStringified = this._getSelectorToJSONString(oScope); //JSON.stringify(oScope);
-                sSelectorAttributesBtf = JSON.stringify(oScope, null, 2);
-            }
-
-            return {
-                selectorAttributes: sSelectorAttributes,
-                selectorAttributesStringified: sSelectorAttributesStringified ? sSelectorAttributesStringified : sSelectorAttributes,
-                selectorAttributesBtf: sSelectorAttributesBtf,
-                selector: sSelector
-            };
-        };
-
-        TestHandler.prototype._getOPACodeFromItem = function (oElement) {
-            var sCode = "";
-            var aCode = [];
-
-            var oSelector = oElement.selector;
-            var sType = oElement.property.type; // SEL | ACT | ASS
-            var sActType = oElement.property.actKey; //PRS|TYP
-
-            //(1) first: build up the actual selector
-            var sSelectorAttributes = "";
-
-            sSelectorAttributes = oSelector.selectorAttributesStringified;
-            var sSelectorFinal = sSelectorAttributes;
-            if (!oElement.item.viewProperty.localViewName) {
-                oElement.item.viewProperty.localViewName = "Unknown";
-            }
-            var sCurrentPage = oElement.item.viewProperty.localViewName;
-            sCurrentPage = "onThe" + sCurrentPage + "Page";
-
-            var sAction = "";
-            if (sType === 'ACT') {
-                sCode = "When." + sCurrentPage + ".";
-                switch (sActType) {
-                    case "PRS":
-                        sAction = "iPressElement";
-                        break;
-                    case "TYP":
-                        sAction = "iEnterText";
-                        break;
-                    default:
-                        return "";
-                }
-
-                sCode = sCode + sAction + "(" + sSelectorFinal;
-                if (sActType == "TYP") {
-                    sCode = sCode + ',"' + oElement.property.selectActInsert + '"';
-                }
-                sCode = sCode + ");";
-                aCode = [sCode];
-            } else if (sType === 'ASS') {
-                if (oElement.assertion.assertType === "ATTR") {
-                    for (var i = 0; i < oElement.assertion.assertCode.length; i++) {
-                        var oAss = oElement.assertion.assertCode[i];
-
-                        // we could make 100 of mock methods here to make that more OPA style.. but...ya..
-                        sCode = "Then." + sCurrentPage + ".theExpactationIs(" + sSelectorFinal + ",'" + oAss.assertLocation + "','" + oAss.assertType + "',";
-
-                        if (typeof oAss.assertValue === "boolean") {
-                            sCode += oAss.assertValue;
-                        } else if (typeof oAss.assertValue === "number") {
-                            sCode += oAss.assertValue;
-                        } else {
-                            sCode += '"' + oAss.assertValue + '"';
-                        }
-                        sCode += ");"
-
-                        aCode.push(sCode);
-                    }
-                } else if (oElement.assertion.assertType === "EXS") {
-                    sCode = "Then." + sCurrentPage + ".theElementIsExisting(" + sSelectorFinal + ");"
-                    aCode = [sCode];
-                } else if (oElement.assertion.assertType === "MTC") {
-                    sCode = "Then." + sCurrentPage + ".theElementIsExistingNTimes(" + sSelectorFinal + "," + oElement.assertion.assertMatchingCount + ");"
-                    aCode = [sCode];
-                }
-            }
-
-            return aCode;
-        };
-
-        TestHandler.prototype._getCodeFromItem = function (oElement) {
-            var sCode = "";
-            var aCode = [];
-            //get the actual element - this might seem a little bit superflicious, but is very helpful for exporting/importing (where the references are gone)
-            var oSelector = oElement.selector;
-            var sType = oElement.property.type; // SEL | ACT | ASS
-            var sActType = oElement.property.actKey; //PRS|TYP
-
-            //(1) first: build up the actual selector
-            var sSelector = "";
-            var sSelectorAttributes = "";
-
-            sSelector = oSelector.selector;
-            sSelectorAttributes = oSelector.selectorAttributesStringified;
-            var sSelectorFinal = sSelector + "(" + sSelectorAttributes + ")";
-
-            var sAction = "";
-            if (sType === "SEL") {
-                sCode = "await " + sSelectorFinal + ";";
-                aCode = [sCode];
-            } else if (sType === 'ACT') {
-                sCode = "await t.";
-                switch (sActType) {
-                    case "PRS":
-                        sAction = "click";
-                        break;
-                    case "TYP":
-                        sAction = "typeText";
-                        break;
-                    default:
-                        return "";
-                }
-
-                if (sActType === "TYP" && oElement.property.selectActInsert.length === 0) {
-                    //there is no native clearing.. :-) we have to select the next and press the delete key.. yeah
-                    //we do not have to check "replace text" - empty text means ALWAYS replace
-                    sCode = "await t.selectText(" + sSelectorFinal + ");";
-                    aCode = [sCode];
-                    sCode = "await t.pressKey('delete');"
-                    aCode.push(sCode);
-                } else {
-                    sCode = sCode + sAction + "(" + sSelectorFinal;
-                    if (sActType == "TYP") {
-                        sCode = sCode + ',"' + oElement.property.selectActInsert + '"';
-                        if (oElement.property.actionSettings.pasteText === true || oElement.property.actionSettings.testSpeed !== 1 || oElement.property.actionSettings.replaceText === true) {
-                            sCode += ", { paste: " + oElement.property.actionSettings.pasteText + ", speed: " + oElement.property.actionSettings.testSpeed + ", replace: " + oElement.property.actionSettings.replaceText + " }"
-                        }
-                    }
-                    sCode = sCode + ");";
-                    aCode = [sCode];
-                }
-            } else if (sType === 'ASS') {
-                for (var i = 0; i < oElement.assertion.code.length; i++) {
-                    sCode = "await t." + "expect(" + sSelectorFinal + oElement.assertion.code[i] + ";";
-                    aCode.push(sCode);
-                }
-            }
-
-            if (oElement.property.actionSettings.blur) {
-                aCode.push('await t.click(Selector(".sapUiBody"));'); //this is just a dummy.. a utils method fireing a "blur" would be better..
-            }
-
-            return aCode;
-        };
 
         TestHandler.prototype._getValueSpec = function (oLine, oItem) {
             var aCriteriaSettings = this._criteriaTypes[oLine.criteriaType].criteriaSpec(oItem);
@@ -878,12 +716,6 @@ else {
                 return sId.substr(sId.lastIndexOf(sCurrentComponent) + sCurrentComponent.length);
             }
             return sId;
-        };
-
-        TestHandler.prototype.onSelectItem = function (oEvent) {
-            var oObject = oEvent.getSource().getBindingContext("viewModel").getObject();
-            var oCurrentId = oObject.control;
-            this._setItem(oCurrentId, oCurrentId.getDomRef());
         };
 
 
@@ -1089,7 +921,9 @@ else {
                 if (!oItemCur) {
                     break;
                 }
-                oItem.parents.push(this._getElementInformation(oItemCur, oItemCur.getDomRef(), false));
+                if (oItemCur && oItemCur.getDomRef && oItemCur.getDomRef()) {
+                    oItem.parents.push(this._getElementInformation(oItemCur, oItemCur.getDomRef ? oItemCur.getDomRef() : null, false));
+                }
             }
 
             if (this._oCurrentDomNode) {
@@ -1342,6 +1176,7 @@ else {
             //remove the "non-serializable" data..
 
             this.fireEventToContent("itemSelected", this._removeNonSerializable(oItem));
+            this.lockScreen();
         };
 
         TestHandler.prototype._removeNonSerializable = function (oItem) {
@@ -1394,6 +1229,7 @@ else {
             this._bActive = true;
             this._bStarted = true;
             $(".HVRReveal").removeClass('HVRReveal');
+            this.lockScreen(); //we are locked until the next step occurs, or the overall test is stopped..
         };
         TestHandler.prototype._stop = function () {
             this._bActive = false;
@@ -1420,7 +1256,7 @@ else {
                     if (e.ctrlKey && e.altKey && e.shiftKey && e.which == 84) {
                         this._bActive = this._bActive !== true;
                     } else if (e.keyCode == 27) {
-                        if (!(that._oDialog && that._oDialog.isOpen())) {
+                        if (this._bScreenLocked === true) {
                             this._stop(); //stop on escape
                         }
                     }
@@ -1442,28 +1278,16 @@ else {
                 var fnOldEvent = sap.ui.core.Popup.prototype.onFocusEvent;
                 sap.ui.core.Popup.prototype.onFocusEvent = function (oBrowserEvent) {
                     if (that._bActive === false) {
-                        if (that._bDialogActive === false) {
+                        if (that._bScreenLocked === false) {
                             return fnOldEvent.apply(this, arguments);
                         }
                     }
 
-                    var aControl = $(oBrowserEvent.target).control();
-                    for (var i = 0; i < aControl.length; i++) {
-                        var oElement = aControl[i];
-                        while (oElement) {
-                            if (oElement.getId() === that._oDialog.getId() || oElement.getId().indexOf("testDialog") !== -1) {
-                                return fnOldEvent.apply(this, arguments);
-                            } if (that._oPopoverAction && (oElement.getId() === that._oPopoverAction.getId() || oElement.getId().indexOf("testActionSettings") !== -1)) {
-                                return fnOldEvent.apply(this, arguments);
-                            }
-                            oElement = oElement.getParent();
-                        }
-                    }
                     return;
                 };
 
                 $('*').on("mouseup mousedown mousemove mouseout", function (e) {
-                    if (this._bActive === false) {
+                    if (this._bActive === false && this._bScreenLocked === false) {
                         return;
                     }
 
@@ -1475,9 +1299,13 @@ else {
 
                 $('*').click(function (event) {
                     if (this._bActive === false) {
-                        return;
-                    }
-                    if (this._oDialog && this._oDialog.isOpen()) {
+                        //no active recording, but still recording ongoing (e.g. in the other tab..)
+                        if (this._bScreenLocked === true) {
+                            MessageToast.show("Please finalize the step in the Popup, before proceeding...");
+                            event.preventDefault();
+                            event.stopPropagation();
+                            event.stopImmediatePropagation();
+                        }
                         return;
                     }
 
@@ -2433,7 +2261,7 @@ else {
     var _getParentWithDom = function (oItem, iCounter, bViewOnly) {
         oItem = oItem.getParent();
         while (oItem && oItem.getParent) {
-            if (oItem.getDomRef && oItem.getDomRef()) {
+            if (oItem.getMetadata && oItem.getMetadata().getElementName) { //dom is not required, but it must be a valid element name
                 iCounter = iCounter - 1;
                 if (bViewOnly === true && !oItem.getViewData) {
                     oItem = oItem.getParent();
@@ -2714,7 +2542,7 @@ else {
         if (oTestGlobalBuffer["fnGetElement"][bFull][oItem.getId()]) {
             return oTestGlobalBuffer["fnGetElement"][bFull][oItem.getId()];
         }
-        if (!oDomNode) {
+        if (!oDomNode && oItem.getDomRef) {
             oDomNode = oItem.getDomRef();
         }
 
@@ -2765,8 +2593,35 @@ else {
         //get metadata..
         oReturn.metadata = {
             elementName: oItem.getMetadata().getElementName(),
-            componentName: _getOwnerComponent(oItem)
+            componentName: _getOwnerComponent(oItem),
+            componentId: "",
+            componentTitle: "",
+            componentDescription: "",
+            componentDataSource: {}
         };
+        //enhance component information..
+        var oComponent = sap.ui.getCore().getComponent(oReturn.metadata.componentName);
+        if ( oComponent ) {
+            var oManifest = oComponent.getManifest();
+            if( oManifest && oManifest["sap.app"]) {
+                var oApp = oManifest["sap.app"];
+                oReturn.metadata.componentId = oApp.id;
+                oReturn.metadata.componentTitle = oApp.title;
+                oReturn.metadata.componentDescription = oApp.description;
+                if (oApp.dataSources) {
+                    for (var sDs in oApp.dataSources) {
+                        var oDS = oApp.dataSources[sDs];
+                        if ( oDS.type !== "OData" ) {
+                            continue;
+                        }
+                        oReturn.metadata.componentDataSource[sDs] = {
+                            uri: oDS.uri,
+                            localUri: (oDS.settings && oDS.settings.localUri) ? oDS.settings.localUri : ""
+                        };
+                    }
+                }
+            }
+        }
 
         if (bFull === false) {
             oTestGlobalBuffer["fnGetElement"][bFull][oItem.getId()] = oReturn;

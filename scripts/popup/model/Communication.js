@@ -7,7 +7,24 @@ sap.ui.define([
         _aEvents: {},
         _oUUIDs: {},
         _sTabId: "",
+        constructor : function() {
+            this._oWindowId = null;
+            chrome.runtime.onMessage.addListener(
+                function (request, sender, sendResponse) {
+                    if (request && request.type === "send-window-id") {
+                        this._oWindowId = request.windowid;
+                    }
+                }.bind(this)
+            );
+            chrome.runtime.sendMessage({ type: "HandshakeToWindow" }, function (response) {
+                //ask to get our window id
+            }.bind(this));
+        }
     });
+
+    Messaging.prototype.getOwnWindowId = function() {
+        return this._oWindowId;
+    };
 
     Messaging.prototype.register = function (sTabId) {
         this._sTabId = sTabId;

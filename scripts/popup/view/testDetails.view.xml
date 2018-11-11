@@ -10,12 +10,6 @@
     <semantic:FullscreenPage navButtonPress="onNavBack" showNavButton="true" title="Test {viewModel>/codeSettings/testName}" busy="{viewModel>/busy}">
         <semantic:customHeaderContent>
             <Bar>
-                <contentMiddle>
-                    <Title text="Test {viewModel>/codeSettings/testName}"/>
-                </contentMiddle>
-                <contentRight>
-                    <Button icon="sap-icon://record" press="onContinueRecording"/>
-                </contentRight>
             </Bar>
         </semantic:customHeaderContent>
 
@@ -43,7 +37,12 @@
 
                                 <Label visible="false" text="Support-Assistant" tooltip="Add Support-Assistant steps, before every navigation step"/>
                                 <CheckBox visible="false" selected="{viewModel>/codeSettings/supportAssistant}" select="onUpdatePreview"/>
+
+                                <Label text="Replay" tooltip="Replay.."/>
+                                <Button icon="sap-icon://play" press="onReplayAll"/>
                             </f:content>
+
+
                         </f:SimpleForm>
 
                         <Panel expandable="true" expanded="true" width="auto">
@@ -103,8 +102,8 @@
                                                 <Text text="{navModel>item/identifier/ui5Id}"/>
                                                 <Text text="{navModel>item/metadata/elementName}"/>
                                                 <HBox>
-                                                    <Button icon="sap-icon://edit"/>
-                                                    <Button icon="sap-icon://delete"/>
+                                                    <Button icon="sap-icon://edit" press="onEditStep"/>
+                                                    <Button icon="sap-icon://delete" press="onDeleteStep"/>
                                                 </HBox>
                                             </cells>
                                         </ColumnListItem>
@@ -137,6 +136,7 @@
             </IconTabBar>
         </semantic:content>
         <semantic:customFooterContent>
+            <Button icon="sap-icon://record" text="Record" press="onContinueRecording"/>
             <Button id="beDelete" type="Reject" text="Delete" press="onDelete"/>
             <Button id="btCancel" type="Emphasized" text="Cancel" press="onNavBack"/>
             <Button id="btSave" type="Accept" text="Save" press="onSave"/>

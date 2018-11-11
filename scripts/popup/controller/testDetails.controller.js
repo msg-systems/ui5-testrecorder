@@ -96,8 +96,32 @@ sap.ui.define([
             this._createDialog();
             this.getOwnerComponent().getRouter().getRoute("testDetails").attachPatternMatched(this._onTestDisplay, this);
             this.getOwnerComponent().getRouter().getRoute("testDetailsCreate").attachPatternMatched(this._onTestCreate, this);
+            sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
         }
     });
+
+    TestDetails.prototype._recordStopped = function () {
+        var dialog = new Dialog({
+            title: 'Browser Window closed',
+            type: 'Message',
+            state: 'Error',
+            content: new Text({
+                text: 'The recorded browser window focus is lost - please do not close during recording.'
+            }),
+            beginButton: new Button({
+                text: 'OK',
+                press: function () {
+                    dialog.close();
+                    this.getRouter().navTo("start");
+                }.bind(this)
+            }),
+            afterClose: function () {
+                dialog.destroy();
+            }
+        });
+
+        dialog.open();
+    };
 
     TestDetails.prototype.uuidv4 = function () {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -149,7 +173,7 @@ sap.ui.define([
         var sId = this.getModel("navModel").getProperty("/test/uuid");
         var aExisting = [];
         chrome.storage.local.get(["items"], function (items) {
-            if ( items && items.items ) {
+            if (items && items.items) {
                 aExisting = items.items;
             }
             //check if we are already existing (do not add twice to the array..)
@@ -166,6 +190,8 @@ sap.ui.define([
 
 
     TestDetails.prototype.onNavBack = function () {
+        RecordController.stopRecording();
+        this._oRecordDialog.close();
         this.getRouter().navTo("start");
     };
 
@@ -194,8 +220,11 @@ sap.ui.define([
 
     TestDetails.prototype._onItemSelected = function (oData) {
         Navigation.setSelectedItem(oData);
+        RecordController.focusPopup();
+
         this.getRouter().navTo("elementCreate", {
-            TestId: this.getModel("navModel").getProperty("/test/uuid")
+            TestId: this.getModel("navModel").getProperty("/test/uuid"),
+            ElementId: oData.identifier.ui5AbsoluteId
         });
     };
 
@@ -206,6 +235,10 @@ sap.ui.define([
         if (sCurrentUUID !== sTargetUUID) {
             //we have to read the current data..
             chrome.storage.local.get(sTargetUUID, function (oSave) {
+                if (!oSave[sTargetUUID]) {
+                    this.getRouter().navTo("start");
+                    return;
+                }
                 oSave = JSON.parse(oSave[sTargetUUID]);
                 this._oModel.setProperty("/codeSettings", oSave.codeSettings);
                 this.getModel("navModel").setProperty("/elements", oSave.elements);
@@ -344,10 +377,24 @@ sap.ui.define([
         //group elements by assertions (Given, When, Then)
         var aCluster = [[]];
         var bNextIsBreak = false;
+        var sFirstComponent = "";
+        var sFirstPage = "";
+        var aPages = {};
+        var oFirstComponent = null;
         for (var i = 0; i < aElements.length; i++) {
             if (bNextIsBreak === true) {
                 aCluster.push([]);
                 bNextIsBreak = false;
+            }
+            if (aElements[i].item.metadata.componentId && sFirstComponent.length === 0) {
+                oFirstComponent = aElements[i].item.metadata;
+                sFirstComponent = aElements[i].item.metadata.componentId;
+                sFirstPage = aElements[i].item.viewProperty.localViewName;
+            }
+            if ( typeof aPages[aElements[i].item.viewProperty.localViewName] === "undefined" ) {
+                aPages[aElements[i].item.viewProperty.localViewName] = {
+                    viewName: aElements[i].item.viewProperty.localViewName
+                };
             }
             if (i < aElements.length - 1 && aElements[i].property.type === "ASS" && aElements[i + 1].property.type === "ACT") {
                 bNextIsBreak = true;
@@ -355,6 +402,20 @@ sap.ui.define([
             aCluster[aCluster.length - 1].push(aElements[i]);
         }
 
+        //make an initialization call...
+        //load the data sources..
+        var oMockConfig = {};
+        for (var sDS in oFirstComponent.componentDataSource) {
+            var oDS = oFirstComponent.componentDataSource[sDS];
+        }
+
+        sCode += '    opaTest("Initialize the Application", function (Given, When, Then) {\n';
+        sCode += '        Given.onThe' + sFirstPage + 'Page.iInitializeMockServer().iStartMockServer().\n        iStartTheApp("' + sFirstComponent + '", { hash: "' + aElements[0].hash + '" });\n\n';
+        sCode += '        When.onThe' + sFirstPage + 'Page.iLookAtTheScreen();\n\n';
+        sCode += '        Then.onThe' + sFirstPage + 'Page.theViewShouldBeVisible();\n';
+        sCode += '    });\n\n'
+
+        //make the rest of the OPA calls..
         for (var i = 0; i < aCluster.length; i++) {
             var aLines = [];
             sCode += "    opaTest('Test " + i + "', function (Given, When, Then) {\n";
@@ -376,6 +437,38 @@ sap.ui.define([
         sCode += "});";
         oCodeTest.code = sCode;
         aCodes.push(oCodeTest);
+
+        //create a code per view..
+        for ( var sPage in aPages ) {
+            var oPage = aPages[sPage];
+            sCode = "sap.ui.define([\n";
+            sCode += '  "sap/ui/test/Opa5",\n';
+            sCode += '  "com/ui5/testing/PageBase"\n';
+            sCode += '], function (Opa5, Common) {\n';
+            sCode += '   "use strict";\n';
+            sCode += '   Opa5.createPageObjects({\n';
+            sCode += '      onThe' + sPage + 'Page: {\n';
+            sCode += '         baseClass: Common,\n';
+            sCode += '         viewName: "' + sPage + '",\n';
+            sCode += '         actions: {},\n';
+            sCode += '         assertions: {},\n';
+            sCode += '      });\n';
+            sCode += '   });\n';
+            sCode += '}';
+            aCodes.push({
+                codeName: "Page Code (" + sPage + ")",
+                code: sCode,
+                type: "CODE",
+                order: 2
+            });
+        }
+
+        aCodes = aCodes.sort(function (aObj, bObj) {
+            if (aObj.order <= bObj.order) {
+                return -1;
+            }
+            return 1;
+        });
         return aCodes;
     };
 
@@ -535,60 +628,6 @@ sap.ui.define([
         return "{ " + this._getSelectorToJSONStringRec(oObject) + " }";
     };
 
-    TestDetails.prototype._getSelectorDefinition = function (oElement) {
-        var oScope = {};
-        var sSelector = "";
-        var sSelectorAttributes = "";
-        var sSelectorAttributesStringified = null;
-        var sSelectorAttributesBtf = "";
-        var oItem = oElement.item;
-        var sActType = oElement.property.actKey; //PRS|TYP
-        var sSelectType = oElement.property.selectItemBy; //DOM | UI5 | ATTR
-        var sSelectorExtension = oElement.property.domChildWith;
-
-        if (sSelectType === "DOM") {
-            sSelector = "Selector";
-            sSelectorAttributes = '#' + oElement.item.identifier.domId + sSelectorExtension;
-            sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
-        } else if (sSelectType === "UI5") {
-            sSelector = "UI5Selector";
-            sSelectorAttributes = oElement.item.identifier.ui5Id + sSelectorExtension;
-            sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
-        } else if (sSelectType === "ATTR") {
-            sSelector = "UI5Selector";
-            var aAttributes = oElement.attributeFilter;
-            if (sSelectorExtension) {
-                $.extend(true, oScope, {
-                    domChildWith: sSelectorExtension
-                });
-            }
-
-            for (var i = 0; i < aAttributes.length; i++) {
-                var oAttribute = aAttributes[i];
-                //get the current item..
-                var oItemLocal = this._attributeTypes[oAttribute.attributeType].getItem(oItem);
-                var oSpec = this._getValueSpec(oAttribute, oItemLocal);
-                if (oSpec === null) {
-                    continue;
-                }
-                //extent the current local scope with the code extensions..x
-                var oScopeLocal = this._attributeTypes[oAttribute.attributeType].getScope(oScope);
-                $.extend(true, oScopeLocal, oSpec.code(oAttribute.criteriaValue));
-            }
-
-            sSelectorAttributes = oScope;
-            sSelectorAttributesStringified = this._getSelectorToJSONString(oScope); //JSON.stringify(oScope);
-            sSelectorAttributesBtf = JSON.stringify(oScope, null, 2);
-        }
-
-        return {
-            selectorAttributes: sSelectorAttributes,
-            selectorAttributesStringified: sSelectorAttributesStringified ? sSelectorAttributesStringified : sSelectorAttributes,
-            selectorAttributesBtf: sSelectorAttributesBtf,
-            selector: sSelector
-        };
-    };
-
     TestDetails.prototype._getOPACodeFromItem = function (oElement) {
         var sCode = "";
         var aCode = [];
@@ -616,7 +655,7 @@ sap.ui.define([
                     sAction = "iPressElement";
                     break;
                 case "TYP":
-                    sAction = "iEnterText";
+                    sAction = "iPressElement";
                     break;
                 default:
                     return "";
@@ -657,6 +696,43 @@ sap.ui.define([
         }
 
         return aCode;
+    };
+
+    TestDetails.prototype.onDeleteStep = function (oEvent) {
+        var aItem = oEvent.getSource().getBindingContext("navModel").getPath().split("/");
+        var sNumber = parseInt(aItem[aItem.length - 1], 10);
+        var aElements = this.getModel("navModel").getProperty("/elements");
+        aElements.splice(sNumber, 1);
+        this.getModel("navModel").setProperty("/elements", aElements);
+    };
+
+    TestDetails.prototype.onReplayAll = function (oEvent) {
+        var sUrl = this._oModel.getProperty("/codeSettings/testUrl");
+        chrome.tabs.create({
+            url: sUrl,
+            active: true
+        }, function (tab) {
+            chrome.windows.create({
+                tabId: tab.id,
+                type: 'normal',
+                focused: true
+            }, function (oWindow) {
+                RecordController._sTabId = tab.id;
+                Communication._sTabId = tab.id;
+                Communication._oWindowId = oWindow.id;
+                RecordController.initializePromises();
+                RecordController._injectIntoTab(tab.id, sUrl);
+                RecordController._oInitializedPromise.then(function () {
+                    debugger;
+                });
+
+            }.bind(this));
+        }.bind(this));
+    };
+
+    TestDetails.prototype.onEditStep = function (oEvent) {
+        //var oItem = oEvent.getSource().getBindingContext("navModel").getObject();
+        //this._onItemSelected( oItem.item );
     };
 
     TestDetails.prototype._getCodeFromItem = function (oElement) {

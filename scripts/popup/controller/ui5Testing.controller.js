@@ -137,13 +137,41 @@ sap.ui.define([
             this.getRouter().getRoute("elementCreate").attachPatternMatched(this._onObjectMatched, this);
             this.getView().setModel(RecordController.getModel(), "recordModel");
             this.getView().setModel(Navigation.getModel(), "navModel");
+            sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
         }
     });
 
     TestHandler.prototype._onObjectMatched = function (oEvent) {
         this._sTestId = oEvent.getParameter("arguments").TestId;
         var oItem = Navigation.getSelectedItem();
+        if ( !oItem || JSON.stringify(oItem) == "{}" ) {
+            this.getRouter().navTo("start");
+            return;
+        }
         this.onClick(oItem);
+    };
+
+    TestHandler.prototype._recordStopped = function() {
+        var dialog = new Dialog({
+            title: 'Browser Window closed',
+            type: 'Message',
+            state: 'Error',
+            content: new Text({
+                text: 'The recorded browser window focus is lost - please do not close during recording.'
+            }),
+            beginButton: new Button({
+                text: 'OK',
+                press: function () {
+                    dialog.close();
+                    this.getRouter().navTo("start");
+                }.bind(this)
+            }),
+            afterClose: function () {
+                dialog.destroy();
+            }
+        });
+
+        dialog.open();
     };
 
     TestHandler.prototype.onShowActionSettings = function (oEvent) {
@@ -295,6 +323,13 @@ sap.ui.define([
                 resolve(JSON.parse(JSON.stringify(oReturn)));
             });
         });
+    };
+    TestHandler.prototype._onCancelStep = function () {
+        //navigate backwards to the screen, and immediatly start recording..
+        this.getRouter().navTo("testDetails", {
+            TestId: this._sTestId
+        }, true);
+        RecordController.startRecording();
     };
 
     TestHandler.prototype._onSave = function () {
@@ -776,142 +811,6 @@ sap.ui.define([
                 selector: sSelector
             };
         };
-
-    TestHandler.prototype._getOPACodeFromItem = function (oElement) {
-        var sCode = "";
-        var aCode = [];
-
-        var oSelector = oElement.selector;
-        var sType = oElement.property.type; // SEL | ACT | ASS
-        var sActType = oElement.property.actKey; //PRS|TYP
-
-        //(1) first: build up the actual selector
-        var sSelectorAttributes = "";
-
-        sSelectorAttributes = oSelector.selectorAttributesStringified;
-        var sSelectorFinal = sSelectorAttributes;
-        if (!oElement.item.viewProperty.localViewName) {
-            oElement.item.viewProperty.localViewName = "Unknown";
-        }
-        var sCurrentPage = oElement.item.viewProperty.localViewName;
-        sCurrentPage = "onThe" + sCurrentPage + "Page";
-
-        var sAction = "";
-        if (sType === 'ACT') {
-            sCode = "When." + sCurrentPage + ".";
-            switch (sActType) {
-                case "PRS":
-                    sAction = "iPressElement";
-                    break;
-                case "TYP":
-                    sAction = "iEnterText";
-                    break;
-                default:
-                    return "";
-            }
-
-            sCode = sCode + sAction + "(" + sSelectorFinal;
-            if (sActType == "TYP") {
-                sCode = sCode + ',"' + oElement.property.selectActInsert + '"';
-            }
-            sCode = sCode + ");";
-            aCode = [sCode];
-        } else if (sType === 'ASS') {
-            if (oElement.assertion.assertType === "ATTR") {
-                for (var i = 0; i < oElement.assertion.assertCode.length; i++) {
-                    var oAss = oElement.assertion.assertCode[i];
-
-                    // we could make 100 of mock methods here to make that more OPA style.. but...ya..
-                    sCode = "Then." + sCurrentPage + ".theExpactationIs(" + sSelectorFinal + ",'" + oAss.assertLocation + "','" + oAss.assertType + "',";
-
-                    if (typeof oAss.assertValue === "boolean") {
-                        sCode += oAss.assertValue;
-                    } else if (typeof oAss.assertValue === "number") {
-                        sCode += oAss.assertValue;
-                    } else {
-                        sCode += '"' + oAss.assertValue + '"';
-                    }
-                    sCode += ");"
-
-                    aCode.push(sCode);
-                }
-            } else if (oElement.assertion.assertType === "EXS") {
-                sCode = "Then." + sCurrentPage + ".theElementIsExisting(" + sSelectorFinal + ");"
-                aCode = [sCode];
-            } else if (oElement.assertion.assertType === "MTC") {
-                sCode = "Then." + sCurrentPage + ".theElementIsExistingNTimes(" + sSelectorFinal + "," + oElement.assertion.assertMatchingCount + ");"
-                aCode = [sCode];
-            }
-        }
-
-        return aCode;
-    };
-
-    TestHandler.prototype._getCodeFromItem = function (oElement) {
-        var sCode = "";
-        var aCode = [];
-        //get the actual element - this might seem a little bit superflicious, but is very helpful for exporting/importing (where the references are gone)
-        var oSelector = oElement.selector;
-        var sType = oElement.property.type; // SEL | ACT | ASS
-        var sActType = oElement.property.actKey; //PRS|TYP
-
-        //(1) first: build up the actual selector
-        var sSelector = "";
-        var sSelectorAttributes = "";
-
-        sSelector = oSelector.selector;
-        sSelectorAttributes = oSelector.selectorAttributesStringified;
-        var sSelectorFinal = sSelector + "(" + sSelectorAttributes + ")";
-
-        var sAction = "";
-        if (sType === "SEL") {
-            sCode = "await " + sSelectorFinal + ";";
-            aCode = [sCode];
-        } else if (sType === 'ACT') {
-            sCode = "await t.";
-            switch (sActType) {
-                case "PRS":
-                    sAction = "click";
-                    break;
-                case "TYP":
-                    sAction = "typeText";
-                    break;
-                default:
-                    return "";
-            }
-
-            if (sActType === "TYP" && oElement.property.selectActInsert.length === 0) {
-                //there is no native clearing.. :-) we have to select the next and press the delete key.. yeah
-                //we do not have to check "replace text" - empty text means ALWAYS replace
-                sCode = "await t.selectText(" + sSelectorFinal + ");";
-                aCode = [sCode];
-                sCode = "await t.pressKey('delete');"
-                aCode.push(sCode);
-            } else {
-                sCode = sCode + sAction + "(" + sSelectorFinal;
-                if (sActType == "TYP") {
-                    sCode = sCode + ',"' + oElement.property.selectActInsert + '"';
-                    if (oElement.property.actionSettings.pasteText === true || oElement.property.actionSettings.testSpeed !== 1 || oElement.property.actionSettings.replaceText === true) {
-                        sCode += ", { paste: " + oElement.property.actionSettings.pasteText + ", speed: " + oElement.property.actionSettings.testSpeed + ", replace: " + oElement.property.actionSettings.replaceText + " }"
-                    }
-                }
-                sCode = sCode + ");";
-                aCode = [sCode];
-            }
-        } else if (sType === 'ASS') {
-            for (var i = 0; i < oElement.assertion.code.length; i++) {
-                sCode = "await t." + "expect(" + sSelectorFinal + oElement.assertion.code[i] + ";";
-                aCode.push(sCode);
-            }
-        }
-
-        if (oElement.property.actionSettings.blur) {
-            aCode.push('await t.click(Selector(".sapUiBody"));'); //this is just a dummy.. a utils method fireing a "blur" would be better..
-        }
-
-        return aCode;
-    };
-
     TestHandler.prototype._getValueSpec = function (oLine, oItem) {
         var aCriteriaSettings = this._criteriaTypes[oLine.criteriaType].criteriaSpec(oItem);
         for (var j = 0; j < aCriteriaSettings.length; j++) {
@@ -967,8 +866,10 @@ sap.ui.define([
     };
 
     TestHandler.prototype.onSelectItem = function (oEvent) {
-        var oObject = oEvent.getSource().getBindingContext("viewModel").getObject();
-        //todo..we have to ask for the element information an go back and forth..
+        var oObj = oEvent.getSource().getBindingContext("viewModel").getObject();
+        Communication.fireEvent("selectItem", {
+            element: oObj.ui5AbsoluteId ? oObj.ui5AbsoluteId : oObj.identifier.ui5AbsoluteId
+        });
     };
 
     TestHandler.prototype.onUpdatePreview = function () {
@@ -1423,11 +1324,10 @@ sap.ui.define([
 
     TestHandler.prototype._createActionPopover = function () {
         if (!this._oPopoverAction) {
-            this._oPopoverAction = sap.ui.xmlfragment({
-                fragmentContent: this._sXMLPageActionSettings,
-                fragmentName: "testActionSettings",
-                id: "testActionSettings"
-            }, this);
+            this._oPopoverAction = sap.ui.xmlfragment(
+                "com.ui5.testing.view.PopoverActionSettings",
+                this
+            );
             this._oPopoverAction.setModel(this._oModel, "viewModel");
             this._oPopoverAction.attachBeforeClose(function () {
                 this._updatePreview();
