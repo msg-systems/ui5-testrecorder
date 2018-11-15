@@ -62,19 +62,11 @@ sap.ui.define([
             codeLanguages: [
                 {
                     key: "TCF",
-                    text: "Testcafe"
-                },
-                {
-                    key: "NGT",
-                    text: "Nightwatch"
-                },
-                {
-                    key: "PTC",
-                    text: "Protractor"
+                    text: "Testcafe (Beta)"
                 },
                 {
                     key: "OPA",
-                    text: "OPA5"
+                    text: "OPA5 (Alpha)"
                 }
             ],
             statics: {
@@ -135,6 +127,8 @@ sap.ui.define([
             this._initMessagePopover();
             this.getView().setModel(this._oModel, "viewModel");
             this.getRouter().getRoute("elementCreate").attachPatternMatched(this._onObjectMatched, this);
+            this.getRouter().getRoute("elementDisplay").attachPatternMatched(this._onObjectMatchedInReplay, this);
+
             this.getView().setModel(RecordController.getModel(), "recordModel");
             this.getView().setModel(Navigation.getModel(), "navModel");
             sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
@@ -143,35 +137,30 @@ sap.ui.define([
 
     TestHandler.prototype._onObjectMatched = function (oEvent) {
         this._sTestId = oEvent.getParameter("arguments").TestId;
+        this._bReplayMode = false;
+        this._oModel.setProperty("/replayMode", false);
         var oItem = Navigation.getSelectedItem();
-        if ( !oItem || JSON.stringify(oItem) == "{}" ) {
+        if (!oItem || JSON.stringify(oItem) == "{}") {
             this.getRouter().navTo("start");
             return;
         }
         this.onClick(oItem);
     };
 
-    TestHandler.prototype._recordStopped = function() {
-        var dialog = new Dialog({
-            title: 'Browser Window closed',
-            type: 'Message',
-            state: 'Error',
-            content: new Text({
-                text: 'The recorded browser window focus is lost - please do not close during recording.'
-            }),
-            beginButton: new Button({
-                text: 'OK',
-                press: function () {
-                    dialog.close();
-                    this.getRouter().navTo("start");
-                }.bind(this)
-            }),
-            afterClose: function () {
-                dialog.destroy();
-            }
-        });
+    TestHandler.prototype._onObjectMatchedInReplay = function (oEvent) {
+        this._sTestId = oEvent.getParameter("arguments").TestId;
+        this._sElementId = oEvent.getParameter("arguments").ElementId;
+        this._bReplayMode = true;
+        var aItems = this.getModel("navModel").getProperty("/elements");
+        var oItem = aItems[this._sElementId];
+        this._oModel.setProperty("/element", oItem);
+        this._oModel.setProperty("/replayMode", true);
+        this._updateSubActionTypes(false);
+        this._adjustDomChildWith(this._oModel.getProperty("/element/item"));
+        this._updatePreview();
+    };
 
-        dialog.open();
+    TestHandler.prototype._recordStopped = function () {
     };
 
     TestHandler.prototype.onShowActionSettings = function (oEvent) {
@@ -221,10 +210,10 @@ sap.ui.define([
         this._oTableContext = new sap.m.Table({
             mode: "MultiSelect",
             itemPress: function (oEvent) {
-                if ( oEvent.getSource().setSelected ) {
+                if (oEvent.getSource().setSelected) {
                     oEvent.getSource().setSelected(oEvent.getSource().getSelected() === false);
                 } else {
-                    oEvent.getParameter("listItem").setSelected(oEvent.getParameter("listItem").getSelected()===false);
+                    oEvent.getParameter("listItem").setSelected(oEvent.getParameter("listItem").getSelected() === false);
                 }
             },
             columns: [
@@ -311,13 +300,18 @@ sap.ui.define([
             item: oElement.item,
             attributeFilter: oElement.attributeFilter,
             assertFilter: oElement.assertFilter,
+            subActionTypes: oElement.subActionTypes,
             selector: this._getSelectorDefinition(oElement),
             assertion: this._getAssertDefinition(oElement),
             href: "",
-            hash: ""
+            hash: "",
+            stepExecuted: true
         };
         return new Promise(function (resolve, reject) {
             Communication.fireEvent("getwindowinfo").then(function (oData) {
+                if (!oData) {
+                    return;
+                }
                 oReturn.href = oData.url;
                 oReturn.hash = oData.hash;
                 resolve(JSON.parse(JSON.stringify(oReturn)));
@@ -325,20 +319,31 @@ sap.ui.define([
         });
     };
     TestHandler.prototype._onCancelStep = function () {
-        //navigate backwards to the screen, and immediatly start recording..
-        this.getRouter().navTo("testDetails", {
-            TestId: this._sTestId
-        }, true);
+        if (this._bReplayMode === true) {
+            this.getRouter().navTo("testReplay", {
+                TestId: this._sTestId
+            }, true);
+        } else {
+            this.getRouter().navTo("testDetails", {
+                TestId: this._sTestId
+            }, true);
+        }
         RecordController.startRecording();
     };
 
     TestHandler.prototype._onSave = function () {
         this._save(function () {
             //navigate backwards to the screen, and immediatly start recording..
-            this.getRouter().navTo("testDetails",{
-                TestId: this._sTestId
-            }, true);
-            RecordController.startRecording();
+            if (this._bReplayMode === true) {
+                this.getRouter().navTo("testReplay", {
+                    TestId: this._sTestId
+                }, true);
+            } else {
+                this.getRouter().navTo("testDetails", {
+                    TestId: this._sTestId
+                }, true);
+                RecordController.startRecording();
+            }
         }.bind(this));
     };
 
@@ -347,7 +352,11 @@ sap.ui.define([
             var oCurrentElement = this._oModel.getProperty("/element");
             this._adjustBeforeSaving(oCurrentElement).then(function (oElementFinal) {
                 var aElements = this.getModel("navModel").getProperty("/elements");
-                aElements.push(oElementFinal);
+                if (this._bReplayMode === true) {
+                    aElements[this._sElementId] = oElementFinal;
+                } else {
+                    aElements.push(oElementFinal);
+                }
                 this.getModel("navModel").setProperty("/elements", aElements);
                 this.getModel("navModel").setProperty("/elementLength", aElements.length);
 
@@ -399,7 +408,7 @@ sap.ui.define([
                 });
             }
         }
-        aRows.sort((a, b) => (a.order > b.order) ? 1 : ((b.order < a.order) ? -1 : 0));
+        aRows = aRows.sort(function (a, b) { if (a.order > b.order) { return 1; } else { return -1; } });
 
         //check if the current value is fine..
         if (aRows.filter(function (e) { return e.domChildWith === sDomChildWith; }).length === 0) {
@@ -463,7 +472,7 @@ sap.ui.define([
             }
         }.bind(this))
     };
-    
+
     TestHandler.prototype._updatePreview = function () {
         var oItem = this._oModel.getProperty("/element");
         oItem = this._adjustBeforeSaving(oItem);
@@ -878,15 +887,15 @@ sap.ui.define([
 
     TestHandler.prototype.onTypeChange = function () {
         this.byId("atrElementsPnl").setExpanded(false);
-        this._adjustAttributeDefaultSetting(this._oModel.getProperty("/element/item"));
+        this._adjustAttributeDefaultSetting(this._oModel.getProperty("/element/item")).then(function (resolve, reject) {
+            //if we are within support assistant mode, run it at least once..
+            if (this._oModel.getProperty("/element/property/type") === "SUP") {
+                this._runSupportAssistantForSelElement();
+            }
 
-        //if we are within support assistant mode, run it at least once..
-        if (this._oModel.getProperty("/element/property/type") === "SUP") {
-            this._runSupportAssistantForSelElement();
-        }
-
-        //update preview
-        this._updatePreview();
+            //update preview
+            this._updatePreview();
+        }.bind(this));
     };
 
     TestHandler.prototype._suspendPerformanceBindings = function () {
@@ -1029,98 +1038,101 @@ sap.ui.define([
                     this._oModel.setProperty("/element/property/selectItemBy", "ATTR"); //change to attributee in case id is not sufficient..
                 }
 
-                this._findBestAttributeDefaultSetting(oItem, false);
-
-                //adjust DOM node for action type "INP"..
-                this._adjustDomChildWith(oItem);
-                resolve();
+                this._findBestAttributeDefaultSetting(oItem, false).then(function () {
+                    //adjust DOM node for action type "INP"..
+                    this._adjustDomChildWith(oItem);
+                    resolve();
+                }.bind(this));
             }.bind(this));
         }.bind(this));
     };
 
     TestHandler.prototype._findBestAttributeDefaultSetting = function (oItem, bForcePopup) {
-        this._adjustAttributeDefaultSetting(oItem);
-        this._getFoundElements().then(function (aReturn) {
-            //in case we still have >1 item - change to
-            if (this._oModel.getProperty("/element/property/selectItemBy") === "ATTR" &&
-                ((aReturn.length > 1 && this._oModel.getProperty("/element/property/type") === 'ACT') || bForcePopup === true)) {
-                //ok - we are still not ready - let's check if we are any kind of item, which is requiring the user to ask for binding context information..
-                //work on our binding context information..
-                var oItem = this._oModel.getProperty("/element/item");
-                var aList = [];
-                if (!jQuery.isEmptyObject(oItem.context)) {
-                    for (var sModel in oItem.context) {
-                        for (var sAttribute in oItem.context[sModel]) {
-                            if (typeof oItem.context[sModel][sAttribute] !== "object") {
+        return new Promise(function (resolve, reject) {
+            this._adjustAttributeDefaultSetting(oItem).then(this._getFoundElements.bind(this)).then(function (aReturn) {
+                //in case we still have >1 item - change to
+                if (this._oModel.getProperty("/element/property/selectItemBy") === "ATTR" &&
+                    ((aReturn.length > 1 && this._oModel.getProperty("/element/property/type") === 'ACT') || bForcePopup === true)) {
+                    //ok - we are still not ready - let's check if we are any kind of item, which is requiring the user to ask for binding context information..
+                    //work on our binding context information..
+                    var oItem = this._oModel.getProperty("/element/item");
+                    var aList = [];
+                    if (!jQuery.isEmptyObject(oItem.context)) {
+                        for (var sModel in oItem.context) {
+                            for (var sAttribute in oItem.context[sModel]) {
+                                if (typeof oItem.context[sModel][sAttribute] !== "object") {
+                                    aList.push({
+                                        type: "BDG",
+                                        typeTxt: "Context",
+                                        bdgPath: sModel + "/" + sAttribute,
+                                        attribute: sAttribute,
+                                        value: oItem.context[sModel][sAttribute],
+                                        importance: oItem.uniquness.context[sModel][sAttribute],
+                                        valueToString: oItem.context[sModel][sAttribute].toString ? oItem.context[sModel][sAttribute].toString() : oItem.context[sModel][sAttribute]
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    if (!jQuery.isEmptyObject(oItem.binding)) {
+                        for (var sAttr in oItem.binding) {
+                            if (typeof oItem.binding[sAttr].path !== "object") {
                                 aList.push({
-                                    type: "BDG",
-                                    typeTxt: "Context",
-                                    bdgPath: sModel + "/" + sAttribute,
-                                    attribute: sAttribute,
-                                    value: oItem.context[sModel][sAttribute],
-                                    importance: oItem.uniquness.context[sModel][sAttribute],
-                                    valueToString: oItem.context[sModel][sAttribute].toString ? oItem.context[sModel][sAttribute].toString() : oItem.context[sModel][sAttribute]
+                                    type: "BNDG",
+                                    typeTxt: "Binding",
+                                    bdgPath: sAttr,
+                                    attribute: sAttr,
+                                    importance: oItem.uniquness.binding[sAttr],
+                                    value: oItem.binding[sAttr].path,
+                                    valueToString: oItem.binding[sAttr].path
                                 });
                             }
                         }
                     }
-                }
-                if (!jQuery.isEmptyObject(oItem.binding)) {
-                    for (var sAttr in oItem.binding) {
-                        if (typeof oItem.binding[sAttr].path !== "object") {
-                            aList.push({
-                                type: "BNDG",
-                                typeTxt: "Binding",
-                                bdgPath: sAttr,
-                                attribute: sAttr,
-                                importance: oItem.uniquness.binding[sAttr],
-                                value: oItem.binding[sAttr].path,
-                                valueToString: oItem.binding[sAttr].path
-                            });
+                    if (!jQuery.isEmptyObject(oItem.property)) {
+                        for (var sAttr in oItem.property) {
+                            if (typeof oItem.property[sAttr] !== "object") {
+                                aList.push({
+                                    type: "ATTR",
+                                    typeTxt: "Property",
+                                    bdgPath: sAttr,
+                                    attribute: sAttr,
+                                    importance: oItem.uniquness.property[sAttr],
+                                    value: oItem.property[sAttr],
+                                    valueToString: oItem.property[sAttr].toString ? oItem.property[sAttr].toString() : oItem.property[sAttr]
+                                });
+                            }
                         }
                     }
-                }
-                if (!jQuery.isEmptyObject(oItem.property)) {
-                    for (var sAttr in oItem.property) {
-                        if (typeof oItem.property[sAttr] !== "object") {
-                            aList.push({
-                                type: "ATTR",
-                                typeTxt: "Property",
-                                bdgPath: sAttr,
-                                attribute: sAttr,
-                                importance: oItem.uniquness.property[sAttr],
-                                value: oItem.property[sAttr],
-                                valueToString: oItem.property[sAttr].toString ? oItem.property[sAttr].toString() : oItem.property[sAttr]
-                            });
+                    var oMerged = this._getMergedClassArray(oItem);
+                    this._oModel.setProperty("/element/itemCloned", oMerged.cloned);
+                    if (oMerged.cloned === true) {
+                        aList = aList.sort(function (aObj, bObj) {
+                            if (aObj.importance <= bObj.importance) {
+                                return 1;
+                            }
+                            return -1;
+                        });
+                    }
+
+                    for (var i = 0; i < aList.length; i++) {
+                        aList[i].numberState = "Error";
+                        if (aList[i].importance >= 80) {
+                            aList[i].numberState = "Success";
+                        } else if (aList[i].importance >= 60) {
+                            aList[i].numberState = "Warning";
                         }
                     }
-                }
-                var oMerged = this._getMergedClassArray(oItem);
-                this._oModel.setProperty("/element/itemCloned", oMerged.cloned);
-                if (oMerged.cloned === true) {
-                    aList = aList.sort(function (aObj, bObj) {
-                        if (aObj.importance <= bObj.importance) {
-                            return 1;
-                        }
-                        return -1;
-                    });
+                    if (aList.length > 0) {
+                        this._oModel.setProperty("/element/possibleContext", aList);
+                        this._oTableContext.removeSelections();
+                        this._oSelectDialog.setModel(this._oModel, "viewModel")
+                        this._oSelectDialog.open();
+                    }
                 }
 
-                for (var i = 0; i < aList.length; i++) {
-                    aList[i].numberState = "Error";
-                    if (aList[i].importance >= 80) {
-                        aList[i].numberState = "Success";
-                    } else if (aList[i].importance >= 60) {
-                        aList[i].numberState = "Warning";
-                    }
-                }
-                if (aList.length > 0) {
-                    this._oModel.setProperty("/element/possibleContext", aList);
-                    this._oTableContext.removeSelections();
-                    this._oSelectDialog.setModel(this._oModel, "viewModel")
-                    this._oSelectDialog.open();
-                }
-            }
+                resolve();
+            }.bind(this));
         }.bind(this));
     };
 
@@ -1159,12 +1171,15 @@ sap.ui.define([
     };
 
     TestHandler.prototype._adjustAttributeDefaultSetting = function (oItem) {
-        var sProp = this._oModel.getProperty("/element/property/selectItemBy");
-        if (sProp != "ATTR") {
-            this._oModel.setProperty("/element/attributeFilter", []);
-        } else {
-            this._findAttribute(oItem); //generate standard, or "best fitting" (whatever that is :-)
-        }
+        return new Promise(function (resolve, reject) {
+            var sProp = this._oModel.getProperty("/element/property/selectItemBy");
+            if (sProp != "ATTR") {
+                this._oModel.setProperty("/element/attributeFilter", []);
+                resolve();
+            } else {
+                this._findAttribute(oItem).then(resolve, reject); //generate standard, or "best fitting" (whatever that is :-)
+            }
+        }.bind(this));
     };
 
     TestHandler.prototype._updateValueState = function (oItem) {
@@ -1199,7 +1214,9 @@ sap.ui.define([
 
     TestHandler.prototype.onFindAttribute = function (oEvent) {
         var oItem = this._oModel.getProperty("/element/item");
-        this._findBestAttributeDefaultSetting(oItem, true);
+        this._findBestAttributeDefaultSetting(oItem, true).then(function () {
+            this._updatePreview();
+        }.bind(this));
     };
 
     TestHandler.prototype._findAttribute = function (oItem) {
@@ -1296,7 +1313,6 @@ sap.ui.define([
         });
         this._oModel.setProperty(sPath, aAttributes);
         this._updateAttributeTypes(this._oModel.getContext(sPath + "/" + (aAttributes.length - 1)));
-        this._check();
     };
 
     TestHandler.prototype.onAddAssertion = function (oEvent) {
@@ -1350,7 +1366,9 @@ sap.ui.define([
         var oInput = this.byId("inpTypeText");
         var oConfirm = this.byId("btSave");
         if (this._oModel.getProperty("/element/property/actKey") === "TYP") {
-            oInput.focus();
+            setTimeout(function () {
+                oInput.focus();
+            }, 100);
         } else {
             //if rating = 5 --> save
             if (this._oModel.getProperty("/element/ratingOfAttributes") === 5) {
@@ -1823,6 +1841,7 @@ sap.ui.define([
                     for (var i = 0; i < oMetadata.length; i++) {
                         var sElementName = oMetadata[i].elementName;
                         var oType = _oElementModelValues[sElementName];
+
                         if (oType) {
                             for (var sModel in oType) {
 
@@ -1858,7 +1877,6 @@ sap.ui.define([
                                 }
                             }
                         }
-                        oMetadata = oMetadata.getParent();
                     }
                     return aReturn;
                 }.bind(this)
@@ -2076,13 +2094,17 @@ sap.ui.define([
                     "TYP": [{ text: "In Input-Field", domChildWith: "-inner", preferred: true, order: 1 }]
                 }
             },
+            "sap.ui.table.Row": {
+                cloned: true,
+                defaultAction: "PRS",
+                actions: {
+                    "PRS": [{ text: "On Selection-Area", domChildWith: "-col0", preferred: true, order: 1 }]
+                }
+            },
             "sap.m.SearchField": {
                 defaultAction: [{ domChildWith: "-search", action: "PRS" },
                 { domChildWith: "-reset", action: "PRS" },
                 { domChildWith: "", action: "TYP" }]
-            },
-            "sap.ui.table.Row": {
-                cloned: true
             }
         };
     };

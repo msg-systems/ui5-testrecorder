@@ -77,17 +77,11 @@
 
                                 document.dispatchEvent(new CustomEvent('do-ui5-from-extension-to-inject', { detail: request }));
 
-                                if (oLastAnswer[request.uuid].data !== null) {
-                                    if (oLastAnswer[request.uuid].data.type !== "answer-async") {
-                                        sendResponse(oLastAnswer[request.uuid].data);
-                                    } else {
-                                        sendResponse({
-                                            data: {
-                                                asyncAnswer: true
-                                            }
-                                        })
+                                sendResponse({
+                                    data: {
+                                        asyncAnswer: true
                                     }
-                                }
+                                });
                             }
                             if (request.startForControl) {
                                 if (oLastDom) {

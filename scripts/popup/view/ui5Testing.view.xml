@@ -39,7 +39,7 @@
                 <headerToolbar>
                     <Toolbar height="3rem" style="Clear">
                         <ToolbarSpacer/>
-                        <Button id="btClose" type="Reject" text="Cancel Step" press="_onCancelStep"/>
+                        <Button id="btClose" type="Reject" text="Cancel" press="_onCancelStep"/>
                         <Button id="btSave" type="Accept" text="Save Step" press="_onSave"/>
                     </Toolbar>
                 </headerToolbar>
@@ -321,7 +321,7 @@
             </Panel>
         </semantic:content>
         <semantic:customFooterContent>
-            <Button id="btCloseFt" type="Reject" text="Cancel Step" press="_onCancelStep"/>
+            <Button id="btCloseFt" type="Reject" text="Cancel" press="_onCancelStep"/>
             <Button id="btSaveFt" type="Accept" text="Save Step" press="_onSave"/>
         </semantic:customFooterContent>
     </semantic:FullscreenPage>

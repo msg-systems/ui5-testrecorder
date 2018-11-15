@@ -16,19 +16,11 @@ sap.ui.define([
                 codeLanguages: [
                     {
                         key: "TCF",
-                        text: "Testcafe"
-                    },
-                    {
-                        key: "NGT",
-                        text: "Nightwatch"
-                    },
-                    {
-                        key: "PTC",
-                        text: "Protractor"
+                        text: "Testcafe (Beta)"
                     },
                     {
                         key: "OPA",
-                        text: "OPA5"
+                        text: "OPA5 (Alpha)"
                     }
                 ]
             };

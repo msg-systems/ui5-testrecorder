@@ -9,16 +9,13 @@
     xmlns:core="sap.ui.core">
     <semantic:FullscreenPage navButtonPress="onNavBack" showNavButton="true" title="Test Overview" busy="{viewModel>/busy}">
         <semantic:content>
-            <Table fixedLayout="false" inset="false" items="{ path: 'viewModel>/items', sorter: { path: 'createdAt' } }" noDataText="{i18n>notFoundTitle}">
+            <Table fixedLayout="false" inset="false" items="{ path: 'viewModel>/items', sorter: { path: 'createdAt', descending: true  } }" noDataText="{i18n>notFoundTitle}">
                 <columns>
                     <Column>
-                        <Text text="UUID" />
+                        <Text text="Test-Name" />
                     </Column>
                     <Column>
                         <Text text="Created At" />
-                    </Column>
-                    <Column>
-                        <Text text="Test-Name" />
                     </Column>
                     <Column>
                         <Text text="URL" />
@@ -27,15 +24,18 @@
                 <items>
                     <ColumnListItem type="Navigation" press="onNavigateToTest">
                         <cells>
-                            <Text text="{viewModel>uuid}"/>
-                            <Text text="{viewModel>createdAt}"/>
                             <Text text="{viewModel>testName}"/>
+                            <Text text="{ path: 'viewModel>createdAt', type: 'sap.ui.model.type.DateTime' }"/>
                             <Text text="{viewModel>testUrl}"/>
                         </cells>
                     </ColumnListItem>
                 </items>
             </Table>
+            <core:html content="&lt;input type='file' id='importOrigHelper' accept='.json' style='display:none'/&gt;"/>
 
-        </semantic:content>
-    </semantic:FullscreenPage>
-</mvc:View>
+            </semantic:content>
+            <semantic:customFooterContent>
+                <Button id="beImport" text="Import" press="onImport"/>
+            </semantic:customFooterContent>
+        </semantic:FullscreenPage>
+    </mvc:View>

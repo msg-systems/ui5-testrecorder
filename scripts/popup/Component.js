@@ -100,6 +100,11 @@ sap.ui.define([
                                 "target": "testDetails"
                             },
                             {
+                                "pattern": "/testReplay/{TestId}",
+                                "name": "testReplay",
+                                "target": "testReplay"
+                            },
+                            {
                                 "pattern": "/testDetailsCreate",
                                 "name": "testDetailsCreate",
                                 "target": "testDetailsCreate"
@@ -131,6 +136,12 @@ sap.ui.define([
                                 "viewName": "ui5Testing",
                                 "viewLevel": 1,
                                 "viewId": "ui5Testing",
+                                "controlAggregation": "pages"
+                            },
+                            "testReplay": {
+                                "viewName": "testDetails",
+                                "viewLevel": 1,
+                                "viewId": "testDetails",
                                 "controlAggregation": "pages"
                             },
                             "testDetails": {

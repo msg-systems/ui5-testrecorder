@@ -54,6 +54,9 @@
                             <content>
                                 <Table fixedLayout="false" id="tblPerformedSteps" inset="false" items="{navModel>/elements}" noDataText="{i18n>notFoundTitle}">
                                     <columns>
+                                        <Column visible="{viewModel>/replayMode}">
+                                            <Text text="Play"/>
+                                        </Column>
                                         <Column>
                                             <Text text="Type" />
                                         </Column>
@@ -73,6 +76,7 @@
                                     <items>
                                         <ColumnListItem>
                                             <cells>
+                                                <Button visible="{= ${navModel>showPlay} &amp;&amp; ${viewModel>/replayMode}}" icon="sap-icon://play" type="Accept" press="onReplaySingleStep"/>
                                                 <Select items="{viewModel>/statics/type}" enabled="false" selectedKey="{navModel>property/type}">
                                                     <items>
                                                         <core:Item text="{viewModel>text}" key="{viewModel>key}"/>
@@ -102,7 +106,7 @@
                                                 <Text text="{navModel>item/identifier/ui5Id}"/>
                                                 <Text text="{navModel>item/metadata/elementName}"/>
                                                 <HBox>
-                                                    <Button icon="sap-icon://edit" press="onEditStep"/>
+                                                    <Button icon="sap-icon://edit" visible="{= ${navModel>showPlay} &amp;&amp; ${viewModel>/replayMode}}" press="onEditStep"/>
                                                     <Button icon="sap-icon://delete" press="onDeleteStep"/>
                                                 </HBox>
                                             </cells>
@@ -137,6 +141,7 @@
         </semantic:content>
         <semantic:customFooterContent>
             <Button icon="sap-icon://record" text="Record" press="onContinueRecording"/>
+            <Button id="beExport" text="Export" press="onExport"/>
             <Button id="beDelete" type="Reject" text="Delete" press="onDelete"/>
             <Button id="btCancel" type="Emphasized" text="Cancel" press="onNavBack"/>
             <Button id="btSave" type="Accept" text="Save" press="onSave"/>

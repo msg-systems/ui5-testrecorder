@@ -51,6 +51,9 @@ sap.ui.define([
     };
 
     Messaging.prototype._handleAsyncAnswer = function(oData) {
+        if (!this._oUUIDs[oData.uuid]) {
+            return;
+        }
         this._oUUIDs[oData.uuid].resolveFn(oData.data);
     };
 
@@ -80,16 +83,20 @@ sap.ui.define([
             this._oUUIDs[oEvent.uuid].resolveFn = resolve;
             
             chrome.tabs.sendMessage(this._sTabId, oEvent, function (response) {
+                oEvent = oEvent;
                 if (response && response.data && response.data.asyncAnswer === true ) {
                     return; //answer will follow, but async..
                 }
+                if (!response) {
+                    return;
+                }
                 
                 if (response && response.data) {
-                    resolve(response.data);
+                    this._oUUIDs[response.uuid].resolveFn(response.data);
                 } else {
-                    resolve();
+                    this._oUUIDs[response.uuid].resolveFn();
                 }
-            });
+            }.bind(this));
         }.bind(this));
     };
 

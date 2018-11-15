@@ -3,8 +3,9 @@ sap.ui.define([
     "com/ui5/testing/model/Communication",
     "com/ui5/testing/model/RecordController",
     "com/ui5/testing/model/Navigation",
+    "com/ui5/testing/model/ExportImport",
     "sap/ui/model/json/JSONModel"
-], function (BaseController, Communication, RecordController, Navigation, JSONModel) {
+], function (BaseController, Communication, RecordController, Navigation, ExportImport, JSONModel) {
     "use strict";
 
     return BaseController.extend("com.ui5.testing.controller.Overview", {
@@ -17,6 +18,28 @@ sap.ui.define([
 
         _onObjectMatched: function () {
             this._loadData();
+        },
+
+        onAfterRendering: function () {
+            var that = this;
+            document.getElementById("importOrigHelper").addEventListener("change", function (e) {
+                var files = e.target.files, reader = new FileReader();
+                var fnImportDone = function () {
+                    that._importDone(JSON.parse(this.result));
+                }
+                reader.onload = fnImportDone;
+                reader.readAsText(files[0]);
+            }, false);
+        },
+
+        _importDone: function (oData) {
+            ExportImport.save(oData).then(function() {
+                this._loadData();
+            }.bind(this));
+        },
+
+        onImport : function() {
+            document.getElementById("importOrigHelper").click();
         },
 
         onNavigateToTest: function (oEvent) {

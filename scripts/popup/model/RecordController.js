@@ -16,6 +16,7 @@ sap.ui.define([
             this._sTabId = "";
             this._sLastTabId = "";
             this._oInitializedPromise = null;
+            this._bIsInjected = false;
             this._oComponent = null;
             Communication.registerEvent("stopped", this._onStopped.bind(this));
             Communication.registerEvent("loaded", this._onInjectionDone.bind(this));
@@ -75,21 +76,29 @@ sap.ui.define([
             }.bind(this);
             MessageToast.show("Initialization for " + this._sCurrentURL + " succeed. UI5 " + oData.version + " is used");
         } else {
-            MessageToast.show("Initialization for " + this._sCurrentURL + " failed. UI5 is not used on that page.");
-            this._oInitPromiseReject();
-            this._oInitializedPromise = null;
+            MessageToast.show("Recording for " + this._sCurrentURL + " not possible. UI5 is not used on that page.");
         }
     };
 
     RecordController.prototype._checkWindowLifecycle = function () {
-        chrome.tabs.onRemoved.addListener(function (tabId, info) {
-            if (tabId === this._sTabId) {
-                //user has stopped in our tab.. inform that this was probably a bad idea (in case we are recording)
-                this._oModel.setProperty("/recording", false);
-                sap.ui.getCore().getEventBus().publish("RecordController", "windowFocusLost", {
-                });
+        chrome.tabs.onUpdated.addListener(function (tabid, changeInfo) {
+            if (tabid === this._sTabId) {
+                //check if we are still injected..
+                if (this._bIsInjected === true) {
+                    chrome.tabs.sendMessage(this._sTabId, { type: "ui5-check-if-injected" }, function (response) {
+                        if (this._bIsInjected === true && (typeof response === "undefined" || typeof response.injected === "undefined")) {
+                            this._bIsInjected = false;
+                            //ok - we are not.. reset our promise, we have to inject again..
+                            sap.ui.getCore().getEventBus().publish("RecordController", "windowFocusLost", {});
+                        }
+                    }.bind(this));
+                }
             }
         }.bind(this));
+    };
+
+    RecordController.prototype.isInjected = function () {
+        return this._bIsInjected;
     };
 
     RecordController.prototype._injectIntoTab = function (sTabId, sUrl) {
@@ -103,13 +112,16 @@ sap.ui.define([
                 }, function () {
                     if (chrome.runtime.lastError) {
                         MessageToast.show("Initialization for " + this._sCurrentURL + " failed. Please restart the Addon.");
-                        this._oInitializedPromise = null;
                     }
                 });
+                this._checkWindowLifecycle();
+                this._bIsInjected = true;
                 Communication.register(this._sTabId);
             } else {
                 //we are already injected.. no need to register or do anything..
                 Communication.register(this._sTabId);
+                this._bIsInjected = true;
+                this._checkWindowLifecycle();
                 this._oInitPromiseResolve();
             }
         }.bind(this));
@@ -123,31 +135,22 @@ sap.ui.define([
         } else {
             MessageToast.show("No URL was selected - no Recording will start");
             this._oInitPromiseReject();
-            this._oInitializedPromise = null;
         }
     };
 
-    RecordController.prototype.initializePromises = function () {
-        this._oInitializedPromise = new Promise(function (resolve, reject) {
-            this._oInitPromiseResolve = resolve;
-            this._oInitPromiseReject = reject;
-        }.bind(this));
-    };
 
-
-    RecordController.prototype.injectScript = function () {
+    RecordController.prototype.injectScript = function (sTabId) {
         var that = this;
         return new Promise(function (resolve, reject) {
-            if (this._oInitializedPromise) {
-                this._oInitializedPromise.then(resolve, reject);
-                return;
-            }
             this._oInitializedPromise = new Promise(function (resolve, reject) {
                 this._oInitPromiseResolve = resolve;
                 this._oInitPromiseReject = reject;
                 chrome.tabs.query({ active: true, currentWindow: false }, function (tabs) {
                     var aData = [];
                     for (var i = 0; i < tabs.length; i++) {
+                        if (sTabId && sTabId !== tabs[i].id) {
+                            continue;
+                        }
                         if (tabs[i].url) {
                             aData.push({
                                 url: tabs[i].url,

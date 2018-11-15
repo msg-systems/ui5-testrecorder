@@ -5,31 +5,36 @@ document.addEventListener('do-ui5-init', function (oXMLEvent) {
         TestHandlerSingleton.init();
     }
 });
-document.addEventListener('do-ui5-switch', function (oXMLEvent) {
-    TestHandlerSingleton.switch();
-});
-document.addEventListener('do-show-code', function (oXMLEvent) {
-    TestHandlerSingleton.showCode();
-});
+
 document.addEventListener("do-ui5-from-extension-to-inject", function (oXMLEvent) {
     var uuid = oXMLEvent.detail.uuid;
     if (uuid) {
         delete oXMLEvent.detail.uuid;
     }
+
+    if (oXMLEvent.detail.type === "navigate") {
+        //early exit, as TestHandlerSingleton is maybe not even existing.
+        if (window.location.href == oXMLEvent.detail.data.target) {
+            window.location.reload();
+        } else {
+            window.location.href = oXMLEvent.detail.data.target;
+        }
+        return;
+    }
     var oReturn = TestHandlerSingleton.handleEvent(oXMLEvent.detail.type, oXMLEvent.detail.data);
     if (!oReturn) {
-        oReturn = { processed: true };
+        oReturn = { processed: true, uuid: uuid };
     } else {
         oReturn.processed = true;
+        oReturn.uuid = uuid;
     }
 
     if (oReturn instanceof Promise) {
-        document.dispatchEvent(new CustomEvent('do-ui5-from-inject-to-answer', { detail: { type: "answer-async", uuid: uuid, data: null } }));
         oReturn.then(function (oData) {
             document.dispatchEvent(new CustomEvent('do-ui5-from-inject-to-async', { detail: { type: "answer", uuid: uuid, data: oData } }));
-        })
+        });
     } else {
-        document.dispatchEvent(new CustomEvent('do-ui5-from-inject-to-answer', { detail: { type: "answer", uuid: uuid, data: oReturn } }));
+        document.dispatchEvent(new CustomEvent('do-ui5-from-inject-to-async', { detail: { type: "answer", uuid: uuid, data: oReturn } }));
     }
 });
 
@@ -41,7 +46,18 @@ document.addEventListener('do-ui5-start', function (oXMLEvent) {
     }
 });
 
-var oTestGlobalBuffer = {};
+var oTestGlobalBuffer = {
+    fnGetElement: {
+        true: {},
+        false: {}
+    },
+    findItem: {},
+    fnGetElementInfo: {
+        true: {},
+        false: {}
+    },
+    label: null
+};
 
 //super shitty code - we are just architectuarlly not designed correctly here..
 if (typeof sap === "undefined" || typeof sap.ui === "undefined" || typeof sap.ui.getCore === "undefined" || !sap.ui.getCore() || !sap.ui.getCore().isInitialized()) {
@@ -97,7 +113,6 @@ else {
                             supportRules: []
                         }
                     },
-                    identifiedElements: [], //elements which are fitting to the current selector
                     item: {},
                     attributeFilter: [],
                     assertFilter: [],
@@ -111,14 +126,6 @@ else {
                     {
                         key: "TCF",
                         text: "Testcafe"
-                    },
-                    {
-                        key: "NGT",
-                        text: "Nightwatch"
-                    },
-                    {
-                        key: "PTC",
-                        text: "Protractor"
                     },
                     {
                         key: "OPA",
@@ -186,6 +193,10 @@ else {
             this._bScreenLocked = false;
         };
 
+        TestHandler.prototype._doReplaySteps = function() {
+            //go over all steps 
+        };
+
         TestHandler.prototype.handleEvent = function (sEventType, oEventData) {
             if (sEventType === "start") {
                 this._start();
@@ -195,9 +206,11 @@ else {
                 this.unlockScreen();
             } else if (sEventType === "find") {
                 return this._getFoundElements(oEventData);
+            } else if (sEventType === "replay-steps") {
+                return this._doReplaySteps(oEventData);
             } else if (sEventType === "execute") {
                 this._executeAction(oEventData);
-            } else if (sEventType === "setWindowLocation" ) {
+            } else if (sEventType === "setWindowLocation") {
                 this._setWindowLocation(oEventData);
             } else if (sEventType === "selectItem") {
                 this._selectItem(oEventData);
@@ -208,7 +221,7 @@ else {
             }
         };
 
-        TestHandler.prototype._setWindowLocation = function(oEventData) {
+        TestHandler.prototype._setWindowLocation = function (oEventData) {
             window.location.href = oEventData.url;
         };
 
@@ -261,6 +274,11 @@ else {
             var oItem = oEventData.element;
             var oDom = this._getFinalDomNode(oItem);
 
+            $(oDom).addClass("HVRReveal");
+            setTimeout(function () {
+                $(oDom).removeClass("HVRReveal");
+            },500);
+            
             if (oItem.property.actKey === "PRS") {
                 //send touch event..
                 var event = new MouseEvent('mousedown', {
@@ -1096,59 +1114,6 @@ else {
             this._findBestAttributeDefaultSetting(oItem, true);
         };
 
-        TestHandler.prototype._findAttribute = function (oItem) {
-            this._oModel.setProperty("/element/attributeFilter", []);
-
-            var bSufficientForStop = false;
-            //(1): we will ALWAYS add the property for metadata (class), as that just makes everyting so much faster and safer..
-            this._add("/element/attributeFilter");
-
-            //(2) add our LOCAL Id in case the local id is ok..
-            if (oItem.identifier.ui5LocalId && oItem.identifier.localIdClonedOrGenerated === false) {
-                this._add("/element/attributeFilter", { attributeType: "OWN", criteriaType: "ID", subCriteriaType: "LID" });
-                bSufficientForStop = true;
-            }
-
-            if (this._getFoundElements().length === 1 && bSufficientForStop === true) { //early exit if possible - the less attributes the better..
-                return;
-            }
-            //(3): we add the parent or the parent of the parent id in case the ID is unique..
-            if (oItem.parent.identifier.ui5Id.length && oItem.parent.identifier.idGenerated === false && oItem.parent.identifier.idCloned === false) {
-                this._add("/element/attributeFilter", { attributeType: "PRT", criteriaType: "ID", subCriteriaType: "ID" });
-                bSufficientForStop = true;
-            } else if (oItem.parentL2.identifier.ui5Id.length && oItem.parentL2.identifier.idGenerated === false && oItem.parentL2.identifier.idCloned === false) {
-                this._add("/element/attributeFilter", { attributeType: "PRT2", criteriaType: "ID", subCriteriaType: "ID" });
-                bSufficientForStop = true;
-            } else if (oItem.parentL3.identifier.ui5Id.length && oItem.parentL3.identifier.idGenerated === false && oItem.parentL3.identifier.idCloned === false) {
-                this._add("/element/attributeFilter", { attributeType: "PRT3", criteriaType: "ID", subCriteriaType: "ID" });
-                bSufficientForStop = true;
-            } else if (oItem.parentL4.identifier.ui5Id.length && oItem.parentL4.identifier.idGenerated === false && oItem.parentL4.identifier.idCloned === false) {
-                this._add("/element/attributeFilter", { attributeType: "PRT4", criteriaType: "ID", subCriteriaType: "ID" });
-                bSufficientForStop = true;
-            }
-            var oMerged = this._getMergedClassArray(oItem);
-            if (oMerged.cloned === true) {
-                bSufficientForStop = false;
-            }
-
-            //(4): now let's go for element specific attributes
-            if (oMerged.defaultAttributes && oMerged.defaultAttributes.length > 0) {
-                //add the elements from default attributes and stop.
-                for (var i = 0; i < oMerged.defaultAttributes.length; i++) {
-                    this._add("/element/attributeFilter", oMerged.defaultAttributes[i]);
-                }
-            }
-            if (this._getFoundElements().length === 1) { //early exit if possible - the less attributes the better..
-                return;
-            }
-
-            //(5): now add the label text if possible and static..
-            if (oItem.label &&
-                oItem.label.binding && oItem.label.binding.text && oItem.label.binding.text.static === true) {
-                this._add("/element/attributeFilter", { attributeType: "PLBL", criteriaType: "BNDG", subCriteriaType: "text" });
-            }
-        };
-
         TestHandler.prototype.onClick = function (oDomNode, bAssertion) {
             var oControl = this._getControlFromDom(oDomNode);
             if (!oControl) {
@@ -1286,7 +1251,7 @@ else {
                     return;
                 };
 
-                $('*').on("mouseup mousedown mousemove mouseout", function (e) {
+                $('*').on("mouseup mousedown mouseover mousemove mouseout", function (e) {
                     if (this._bActive === false && this._bScreenLocked === false) {
                         return;
                     }
@@ -2031,13 +1996,17 @@ else {
                         "TYP": [{ text: "In Input-Field", domChildWith: "-inner", preferred: true, order: 1 }]
                     }
                 },
+                "sap.ui.table.Row": {
+                    cloned: true,
+                    defaultAction: "PRS",
+                    actions: {
+                        "TYP": [{ text: "On Selection-Area", domChildWith: "-col0", preferred: true, order: 1 }]
+                    }
+                },
                 "sap.m.SearchField": {
                     defaultAction: [{ domChildWith: "-search", action: "PRS" },
                     { domChildWith: "-reset", action: "PRS" },
                     { domChildWith: "", action: "TYP" }]
-                },
-                "sap.ui.table.Row": {
-                    cloned: true
                 }
             };
         };
@@ -2601,9 +2570,9 @@ else {
         };
         //enhance component information..
         var oComponent = sap.ui.getCore().getComponent(oReturn.metadata.componentName);
-        if ( oComponent ) {
+        if (oComponent) {
             var oManifest = oComponent.getManifest();
-            if( oManifest && oManifest["sap.app"]) {
+            if (oManifest && oManifest["sap.app"]) {
                 var oApp = oManifest["sap.app"];
                 oReturn.metadata.componentId = oApp.id;
                 oReturn.metadata.componentTitle = oApp.title;
@@ -2611,7 +2580,7 @@ else {
                 if (oApp.dataSources) {
                     for (var sDs in oApp.dataSources) {
                         var oDS = oApp.dataSources[sDs];
-                        if ( oDS.type !== "OData" ) {
+                        if (oDS.type !== "OData") {
                             continue;
                         }
                         oReturn.metadata.componentDataSource[sDs] = {
@@ -2773,7 +2742,19 @@ else {
                 continue;
             }
 
-            oReturn[sModel] = oBindingContext.getObject();
+            //only add those attributes, which are allowed as per _oElementModelValues..
+
+            var oCtxData = oBindingContext.getObject();
+            oReturn[sModel] = {};
+
+            //remove all properties which are a deep object..
+            for (var sProperty in oCtxData ) {
+                var sType = typeof oCtxData[sProperty];
+                if ( sType === "number" || sType === "boolean" || sType === "string" ) {
+                    oReturn[sModel][sProperty] = oCtxData[sProperty];
+                    continue;
+                }
+            }
         }
         return oReturn;
     };
