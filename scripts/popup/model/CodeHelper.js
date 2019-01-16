@@ -204,6 +204,7 @@ sap.ui.define([
                     idSuffix: sDomChildWith
                 }
             }
+            oUI5Selector.own.interaction = oInteraction.interaction;
             bAddSuffix = true;
         } else if ( sType === "ASS" ) {
             //generally interact against the root, in oder to avoid assertion-on non rendered controls

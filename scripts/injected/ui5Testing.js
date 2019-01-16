@@ -345,40 +345,6 @@ else {
         return this._getAllChildrenOfDom(oItem.control.getDomRef(), oItem.control);
     };
 
-    TestHandler.prototype._updateSubActionTypes = function () {
-        var oItem = this._oModel.getProperty("/element/item");
-        var sAction = this._oModel.getProperty("/element/property/actKey");
-        var sDomChildWith = this._oModel.getProperty("/element/property/domChildWith");
-        var oItemMeta = this._getMergedClassArray(oItem);
-        var aRows = [];
-        if (oItemMeta.actions[sAction]) {
-            aRows = oItemMeta.actions[sAction];
-        }
-
-        //add those children which we are missing at the moment (so basically, all chidlren with the same control)
-        var aSubObjects = this._getAllChildrenOfObject(oItem);
-        for (var i = 0; i < aSubObjects.length; i++) {
-            var sIdChild = aSubObjects[i].id.substr(oItem.control.getId().length);
-            //check if sIdChild is part of our current "domChildWith"
-            if (aRows.filter(function (e) { return e.domChildWith === sIdChild; }).length === 0) {
-                aRows.push({
-                    text: ($(aSubObjects[i]).is("input") || $(aSubObjects[i]).is("textarea")) ? "In Input-Field" : sIdChild,
-                    domChildWith: sIdChild,
-                    order: 9999
-                });
-            }
-        }
-        aRows.sort((a, b) => (a.order > b.order) ? 1 : ((b.order < a.order) ? -1 : 0));
-
-        //check if the current value is fine..
-        if (aRows.filter(function (e) { return e.domChildWith === sDomChildWith; }).length === 0) {
-            sDomChildWith = aRows.length >= 0 ? aRows[0].domChildWith : "";
-            this._oModel.setProperty("/element/property/domChildWith", sDomChildWith);
-        }
-        //we now have a valid value - check if there is any preferred value for the currently selected 
-        this._oModel.setProperty("/element/subActionTypes", aRows);
-    };
-
     TestHandler.prototype._findItemAndExclude = function (oSelector) {
         var sStringified = JSON.stringify(oSelector);
         var aInformation = [];
@@ -556,16 +522,6 @@ else {
         return sId;
     };
 
-
-    TestHandler.prototype.onTypeChange = function () {
-        sap.ui.core.Fragment.byId("testDialog", "atrElementsPnl").setExpanded(false);
-        this._adjustAttributeDefaultSetting(this._oModel.getProperty("/element/item"));
-
-        //if we are within support assistant mode, run it at least once..
-        if (this._oModel.getProperty("/element/property/type") === "SUP") {
-            this._runSupportAssistantForSelElement();
-        }
-    };
 
     TestHandler.prototype._getPropertiesInArray = function (oObj) {
         var i = 0;
@@ -775,21 +731,6 @@ else {
         return oItem;
     };
 
-    TestHandler.prototype._setValidAttributeTypes = function (oItem) {
-        var oItem = this._oModel.getProperty("/element/item");
-        var aTypes = this._oModel.getProperty("/statics/attrType");
-        var aAcceptable = [];
-        for (var i = 0; i < aTypes.length; i++) {
-            if (this._attributeTypes[aTypes[i].key]) {
-                var oCtrl = this._attributeTypes[aTypes[i].key].getItem(oItem);
-                if (oCtrl && oCtrl.control) {
-                    aAcceptable.push(aTypes[i]);
-                }
-            }
-        }
-        this._oModel.setProperty("/dynamic/attrType", aAcceptable);
-    };
-
     TestHandler.prototype._getMergedClassArray = function (oItem) {
         var aClassArray = this._getClassArray(oItem);
         var oReturn = { defaultAction: { "": "" }, askForBindingContext: false, preferredProperties: [], cloned: false, defaultAttributes: [], actions: {} };
@@ -852,86 +793,6 @@ else {
             oMetadata = oMetadata.getParent();
         };
         return $.extend(true, [], aReturn);
-    };
-
-    TestHandler.prototype._adjustDomChildWith = function (oItem) {
-        var oMerged = this._getMergedClassArray(oItem);
-        //check if there is any preferred action, and that action is actually available..
-        var oPropAction = oMerged.actions[this._oModel.getProperty("/element/property/actKey")];
-        if (oPropAction) {
-            var sPrefDomChildWith = "";
-            for (var i = 0; i < oPropAction.length; i++) {
-                if (oPropAction[i].preferred === true) {
-                    sPrefDomChildWith = oPropAction[i].domChildWith;
-                    break;
-                }
-            }
-            if (sPrefDomChildWith.length) {
-                var sId = '#' + oItem.control.getId() + sPrefDomChildWith;
-                if ($(sId).length) {
-                    this._oModel.setProperty("/element/property/domChildWith", sPrefDomChildWith);
-                    this._oModel.setProperty("/element/item/dom", $(sId).get(0));
-                    return;
-                }
-            }
-        }
-
-        var sStringDomNodeOriginal = this._oModel.getProperty("/element/property/domChildWith");
-        if (this._oModel.getProperty("/element/property/actKey") === "TYP") {
-            var aNode = this._getAllChildrenOfDom(oItem.control.getDomRef(), oItem.control);
-            //find the first "input" or "textarea" element type
-            for (var i = 0; i < aNode.length; i++) {
-                if ($(aNode[i]).is("input") || $(aNode[i]).is("textarea")) {
-                    this._oModel.setProperty("/element/property/domChildWith", aNode[i].id.substr(oItem.control.getId().length));
-                    this._oModel.setProperty("/element/item/dom", aNode[i]);
-                    break;
-                }
-            }
-        } else {
-            //set to root, in case we are not allowed to work on that node..
-            if (!oMerged.defaultAction[sStringDomNodeOriginal]) {
-                this._oModel.setProperty("/element/property/domChildWith", "");
-            }
-            this._oModel.setProperty("/element/item/dom", oItem.control.getDomRef());
-        }
-    };
-
-    TestHandler.prototype._adjustAttributeDefaultSetting = function (oItem) {
-        var sProp = this._oModel.getProperty("/element/property/selectItemBy");
-        if (sProp != "ATTR") {
-            this._oModel.setProperty("/element/attributeFilter", []);
-        } else {
-            this._findAttribute(oItem); //generate standard, or "best fitting" (whatever that is :-)
-        }
-    };
-
-    TestHandler.prototype._updateValueState = function (oItem) {
-        var sState = ValueState.None;
-        var sStateText = "";
-        if (oItem.identifier.idGenerated === true) {
-            sState = ValueState.Error;
-            sStateText = "The ID is most likely generated, and will not be constant. Do not use that ID (or provide a static id)."
-        } else if (oItem.identifier.idCloned === true) {
-            sState = ValueState.Warning;
-            sStateText = "The ID is most likely referring to a clone, and might not be constant. Do not use that ID."
-        }
-        this._oModel.setProperty("/idQualityState", sState);
-        this._oModel.setProperty("/idQualityStateText", sStateText);
-    };
-
-    TestHandler.prototype.onRemoveAttribute = function (oEvent) {
-        var aContext = sap.ui.core.Fragment.byId("testDialog", "idAttributeTable").getSelectedContexts();
-        this._remove(aContext);
-    };
-
-    TestHandler.prototype.onRemoveAssertion = function (oEvent) {
-        var aContext = sap.ui.core.Fragment.byId("testDialog", "idAssertionTable").getSelectedContexts();
-        this._remove(aContext);
-    };
-
-    TestHandler.prototype.onFindAttribute = function (oEvent) {
-        var oItem = this._oModel.getProperty("/element/item");
-        this._findBestAttributeDefaultSetting(oItem, true);
     };
 
     TestHandler.prototype.onClick = function (oDomNode, bAssertion) {

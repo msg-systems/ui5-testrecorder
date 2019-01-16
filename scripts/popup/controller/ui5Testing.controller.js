@@ -1155,6 +1155,7 @@ sap.ui.define([
             }
             if (sPrefDomChildWith.length) {
                 this._oModel.setProperty("/element/property/domChildWith", sPrefDomChildWith);
+                return;
             }
         }
 
