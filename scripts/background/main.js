@@ -3,7 +3,7 @@ var bNextImmediateStart = false;
 
 chrome.contextMenus.create({
 	title: "Create Element Selector",
-	contexts: ["selection", "page", "link"],
+	contexts: ["selection", "page", "link", "editable", "image"],
 	onclick: function (e) {
 		chrome.tabs.getSelected(null, function (tab) {
 			createAndStart(tab, true);

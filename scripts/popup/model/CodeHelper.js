@@ -221,7 +221,7 @@ sap.ui.define([
         } else if (oElement.property.selectItemBy === "UI5") {
             sElement += "control({ id: " + oUI5Selector.own.id;
             if (bAddSuffix === true) {
-                sElement += "," + this._getSelectorToJSONString(oInteraction) + " }";
+                sElement += "," + "interaction: " + this._getSelectorToJSONString(oInteraction.interaction) + "";
             }
             sElement += "}))";
         } else if (oElement.property.selectItemBy === "ATTR") {
