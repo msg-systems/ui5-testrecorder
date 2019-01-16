@@ -8,8 +8,9 @@ sap.ui.define([
     "com/ui5/testing/model/RecordController",
     "com/ui5/testing/model/GlobalSettings",
     "com/ui5/testing/model/ExportImport",
+    "com/ui5/testing/model/CodeHelper",
     "sap/m/MessageToast"
-], function (Controller, JSONModel, MessagePopover, MessageItem, Navigation, Communication, RecordController, GlobalSettings, ExportImport, MessageToast) {
+], function (Controller, JSONModel, MessagePopover, MessageItem, Navigation, Communication, RecordController, GlobalSettings, ExportImport, CodeHelper, MessageToast) {
     "use strict";
 
     var TestDetails = Controller.extend("com.ui5.testing.controller.TestDetails", {
@@ -18,7 +19,7 @@ sap.ui.define([
             test: {},
             replayMode: false,
             codeSettings: {
-                language: "TCF",
+                language: "UI5",
                 testName: "",
                 testCategory: "",
                 testUrl: "",
@@ -27,16 +28,6 @@ sap.ui.define([
             dynamic: {
                 attrType: []
             },
-            codeLanguages: [
-                {
-                    key: "TCF",
-                    text: "Testcafe (Beta)"
-                },
-                {
-                    key: "OPA",
-                    text: "OPA5 (Alpha)"
-                }
-            ],
             statics: {
                 supportRules: [],
                 type: [
@@ -92,6 +83,7 @@ sap.ui.define([
             this._createDialog();
             this.getOwnerComponent().getRouter().getRoute("testDetails").attachPatternMatched(this._onTestDisplay, this);
             this.getOwnerComponent().getRouter().getRoute("testDetailsCreate").attachPatternMatched(this._onTestCreate, this);
+            this.getOwnerComponent().getRouter().getRoute("testDetailsCreateQuick").attachPatternMatched(this._onTestCreateQuick, this);
             this.getOwnerComponent().getRouter().getRoute("testReplay").attachPatternMatched(this._onTestReplay, this);
             sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
         },
@@ -118,7 +110,6 @@ sap.ui.define([
                     if (message.type === "HandshakeToWindow") {
                         chrome.runtime.sendMessage({
                             "type": "send-window-id",
-                            "windowid": fnWindow.id
                         }, function (response) {
                         });
                     }
@@ -133,15 +124,49 @@ sap.ui.define([
     };
 
     TestDetails.prototype.onReplaySingleStep = function () {
-        var aEvent = this.getModel("navModel").getProperty("/elements");
-
         RecordController.focusTargetWindow();
-        Communication.fireEvent("execute", {
-            element: aEvent[this._iCurrentStep]
-        }).then(function () {
+        this._executeAction().then(function () {
             this.replayNextStep();
         }.bind(this));
     };
+
+    TestDetails.prototype._executeAction = function () {
+        var aEvent = this.getModel("navModel").getProperty("/elements");
+        var oElement = aEvent[this._iCurrentStep];
+
+        return new Promise(function (resolve) {
+            if (oElement.property.type !== "ACT") {
+                resolve();
+                return false;
+            }
+            this._getFoundElements(oElement).then(function (aElements) {
+                if (aElements.length === 0) {
+                    resolve();
+                    return;
+                }
+                oElement.item.identifier = aElements[0].identifier;
+                Communication.fireEvent("execute", {
+                    element: oElement
+                }).then(resolve);
+            });
+        }.bind(this));
+    };
+
+
+    TestDetails.prototype._getFoundElements = function (oElement) {
+        var oDefinition = oElement.selector;
+
+        return new Promise(function (resolve, reject) {
+            this._findItemAndExclude(oDefinition.selectorAttributes).then(function (aItemsEnhanced) {
+                //make an assert check..
+                resolve(aItemsEnhanced);
+            }.bind(this));
+        }.bind(this));
+    };
+
+    TestDetails.prototype._findItemAndExclude = function (oSelector) {
+        return Communication.fireEvent("find", oSelector);
+    }
 
     TestDetails.prototype.replayNextStep = function () {
         var aEvent = this.getModel("navModel").getProperty("/elements");
@@ -149,7 +174,7 @@ sap.ui.define([
         this._updatePlayButton();
         if (this._iCurrentStep >= aEvent.length) {
             this._bReplayMode = false;
-            this.getModel("viewModel").setProperty("/replayMode",false);
+            this.getModel("viewModel").setProperty("/replayMode", false);
             RecordController.startRecording();
             this.getRouter().navTo("testDetails", {
                 TestId: this.getModel("navModel").getProperty("/test/uuid")
@@ -228,8 +253,19 @@ sap.ui.define([
         this._oRecordDialog.close();
     };
 
+    TestDetails.prototype._onTestCreateQuick = function (oEvent) {
+        this._bCreateMode = true;
+        this._bQuickMode = true;
+        this._initTestCreate(true);
+    };
+
     TestDetails.prototype._onTestCreate = function (oEvent) {
         this._bCreateMode = true;
+        this._bQuickMode = false;
+        this._initTestCreate(false);
+    };
+
+    TestDetails.prototype._initTestCreate = function (bImmediate) {
         this._oModel.setProperty("/replayMode", false);
 
         this.getModel("navModel").setProperty("/test", {
@@ -244,33 +280,41 @@ sap.ui.define([
             this._oModel.setProperty("/codeSettings/testName", oData.title);
             this._oModel.setProperty("/codeSettings/testCategory", oData.title);
             this._oModel.setProperty("/codeSettings/testUrl", oData.url);
-            RecordController.startRecording();
+            RecordController.startRecording(bImmediate);
             this.getRouter().navTo("testDetails", {
                 TestId: this.getModel("navModel").getProperty("/test/uuid")
             });
         }.bind(this));
-    };
+    }
 
     TestDetails.prototype._onItemSelected = function (oData) {
-        if ( this._bReplayMode === true ) {
+        console.log("CALLED");
+        if (this._bReplayMode === true) {
             return; //NO!
         }
 
         Navigation.setSelectedItem(oData);
         RecordController.focusPopup();
 
-        this.getRouter().navTo("elementCreate", {
-            TestId: this.getModel("navModel").getProperty("/test/uuid"),
-            ElementId: oData.identifier.ui5AbsoluteId
-        });
+        if ( this._bQuickMode !== true ) {
+            this.getRouter().navTo("elementCreate", {
+                TestId: this.getModel("navModel").getProperty("/test/uuid"),
+                ElementId: oData.identifier.ui5AbsoluteId
+            });
+        } else {
+            this.getRouter().navTo("elementCreateQuick", {
+                TestId: this.getModel("navModel").getProperty("/test/uuid"),
+                ElementId: oData.identifier.ui5AbsoluteId
+            });
+        }
     };
 
     TestDetails.prototype._onTestReplay = function (oEvent) {
         this._bCreateMode = false;
         var sTargetUUID = oEvent.getParameter("arguments").TestId;
         var sCurrentUUID = this.getModel("navModel").getProperty("/test/uuid");
-        if (sTargetUUID == this._oTestId && this._oModel.getProperty("/replayMode") === true ) {
-            if (this.getModel("navModel").getProperty("/elements/" + this._iCurrentStep + "/stepExecuted") === true ) {
+        if (sTargetUUID == this._oTestId && this._oModel.getProperty("/replayMode") === true) {
+            if (this.getModel("navModel").getProperty("/elements/" + this._iCurrentStep + "/stepExecuted") === true) {
                 this.replayNextStep();
             }
             return;
@@ -337,444 +381,15 @@ sap.ui.define([
     TestDetails.prototype._initMessagePopover = function () {
     };
 
-
-
-    TestDetails.prototype._testCafeGetCode = function (aElements) {
-        var aCodes = [];
-        var bSupportAssistant = this._oModel.getProperty("/codeSettings/supportAssistant");
-
-        //for testcafe we are returning: (1) installation instructions..
-        var oCodeInstall = {
-            codeName: "Installation (Non WebIDE)",
-            type: "FTXT",
-            order: 2,
-            code: "<h3>Installation</h3>" +
-                "<p>Execute the following command-line paramters:</p>" +
-                "<code>npm install testcafe testcafe-reporter-xunit ui5-testcafe-selector --save-dev</code>" +
-                "<p>This will install all relevant packages for the test-automation runner.</p>" +
-                "<h3>Test-Configuration</h3>" +
-                "<p>Write a new testfile and copy/paste the code. The file can both be a typescript or a javascript file.</p>" +
-                "<h3>Running</h3>" +
-                "<p>Run via Command-Line via: <code>testcafe chrome your_test_file.js/ts</code><br/>" +
-                "Run via Grunt using <a href=\"https://www.npmjs.com/package/grunt-testcafe\" style=\"color:green; font-weight:600;\">grunt-testcafe</a></p>"
-        }
-        aCodes.push(oCodeInstall);
-
-        //(2) execute script
-        var oCodeTest = {
-            codeName: "Test",
-            type: "CODE",
-            order: 1
-        };
-        var sCode = "";
-        var oCodeSettings = this._oModel.getProperty("/codeSettings");
-        var bSupportAssistantNeeded = bSupportAssistant;
-        var bSelectorNeeded = false;
-        for (var i = 0; i < aElements.length; i++) {
-            if (aElements[i].property.type === "SUP") {
-                bSupportAssistantNeeded = true;
-            }
-            if (aElements[i].property.actionSettings.blur === true) {
-                bSelectorNeeded = true;
-            }
-        }
-
-        sCode = 'import { UI5Selector ' + (bSupportAssistantNeeded ? ", utils " : "") + '} from "ui5-testcafe-selector";\n';
-        if (bSelectorNeeded === true) {
-            sCode += 'import { Selector } from "testcafe";\n';
-        }
-        sCode += "fixture('" + oCodeSettings.testCategory + "')\n";
-        sCode += "  .page('" + oCodeSettings.testUrl + "');\n";
-        sCode += "\n";
-        sCode += "test('" + oCodeSettings.testName + "', async t => {\n";
-        var sCurrentHash = null;
-        var bVariableInitialized = false;
-        var bHashChanged = true;
-        for (var i = 0; i < aElements.length; i++) {
-            var aLines = [];
-            if (aElements[i].property.type !== "SUP") {
-                aLines = this._getCodeFromItem(aElements[i]);
-            }
-
-            if (sCurrentHash === null || sCurrentHash !== aElements[i].hash) {
-                if (sCurrentHash !== null) {
-                    sCode = sCode + "\n  //new route:" + aElements[i].hash + "\n";
-                }
-                sCurrentHash = aElements[i].hash;
-                bHashChanged = true;
-            }
-
-            if ((bHashChanged === true && bSupportAssistant) || aElements[i].property.type === "SUP") {
-                sCode += "  " + (bVariableInitialized === false ? "var " : "") + "oSupportAssistantResult = await utils.supportAssistant(t, '" + aElements[i].item.metadata.componentName + "' );\n";
-                sCode += "  " + "await t.expect(oSupportAssistantResult.High.length).eql(0);\n";
-                bVariableInitialized = true;
-            }
-
-            for (var j = 0; j < aLines.length; j++) {
-                sCode += "  " + aLines[j] + "\n";
-            }
-        }
-        sCode += "});";
-        oCodeTest.code = sCode;
-        aCodes.push(oCodeTest);
-        return aCodes;
-    };
-
-
-    TestDetails.prototype._opaGetCode = function (aElements) {
-        var aCodes = [];
-        var bSupportAssistant = this._oModel.getProperty("/codeSettings/supportAssistant");
-
-        //for testcafe we are returning: (1) installation instructions..
-        var oCodeInstall = {
-            codeName: "Usage",
-            type: "FTXT",
-            order: 2,
-            code: "<h3>t.b.d.</h3>"
-        }
-        aCodes.push(oCodeInstall);
-
-        //(2) execute script
-        var oCodeTest = {
-            codeName: "Test",
-            type: "CODE",
-            order: 1
-        };
-        var sCode = "";
-        var oCodeSettings = this._oModel.getProperty("/codeSettings");
-
-        sCode = 'sap.ui.define([\n';
-        sCode += '    "sap/ui/test/opaQunit"\n';
-        sCode += '], function (opaTest) {\n';
-        sCode += '    "use strict";\n\n';
-        sCode += '    QUnit.module("' + oCodeSettings.testCategory + '");\n\n';
-
-        //group elements by assertions (Given, When, Then)
-        var aCluster = [[]];
-        var bNextIsBreak = false;
-        var sFirstComponent = "";
-        var sFirstPage = "";
-        var aPages = {};
-        var oFirstComponent = null;
-        for (var i = 0; i < aElements.length; i++) {
-            if (bNextIsBreak === true) {
-                aCluster.push([]);
-                bNextIsBreak = false;
-            }
-            if (aElements[i].item.metadata.componentId && sFirstComponent.length === 0) {
-                oFirstComponent = aElements[i].item.metadata;
-                sFirstComponent = aElements[i].item.metadata.componentId;
-                sFirstPage = aElements[i].item.viewProperty.localViewName;
-            }
-            if (typeof aPages[aElements[i].item.viewProperty.localViewName] === "undefined") {
-                aPages[aElements[i].item.viewProperty.localViewName] = {
-                    viewName: aElements[i].item.viewProperty.localViewName
-                };
-            }
-            if (i < aElements.length - 1 && aElements[i].property.type === "ASS" && aElements[i + 1].property.type === "ACT") {
-                bNextIsBreak = true;
-            }
-            aCluster[aCluster.length - 1].push(aElements[i]);
-        }
-
-        //make an initialization call...
-        //load the data sources..
-        var oMockConfig = {};
-        if (oFirstComponent) {
-            oFirstComponent.componentDataSource = oFirstComponent.componentDataSource ? oFirstComponent.componentDataSource : {};
-            for (var sDS in oFirstComponent.componentDataSource) {
-                var oDS = oFirstComponent.componentDataSource[sDS];
-            }
-        }
-
-        sCode += '    opaTest("Initialize the Application", function (Given, When, Then) {\n';
-        sCode += '        Given.onThe' + sFirstPage + 'Page.iInitializeMockServer().iStartMockServer().\n        iStartTheApp("' + sFirstComponent + '", { hash: "' + aElements[0].hash + '" });\n\n';
-        sCode += '        When.onThe' + sFirstPage + 'Page.iLookAtTheScreen();\n\n';
-        sCode += '        Then.onThe' + sFirstPage + 'Page.theViewShouldBeVisible();\n';
-        sCode += '    });\n\n'
-
-        //make the rest of the OPA calls..
-        for (var i = 0; i < aCluster.length; i++) {
-            var aLines = [];
-            sCode += "    opaTest('Test " + i + "', function (Given, When, Then) {\n";
-            for (var j = 0; j < aCluster[i].length; j++) {
-                var oElement = aCluster[i][j];
-
-                if (oElement.property.type !== "SUP") {
-                    aLines = this._getOPACodeFromItem(oElement);
-                }
-
-                for (var x = 0; x < aLines.length; x++) {
-                    sCode += "        " + aLines[x] + "\n";
-                }
-            }
-
-            sCode += "    });\n";
-        }
-
-        sCode += "});";
-        oCodeTest.code = sCode;
-        aCodes.push(oCodeTest);
-
-        //create a code per view..
-        for (var sPage in aPages) {
-            var oPage = aPages[sPage];
-            sCode = "sap.ui.define([\n";
-            sCode += '  "sap/ui/test/Opa5",\n';
-            sCode += '  "com/ui5/testing/PageBase"\n';
-            sCode += '], function (Opa5, Common) {\n';
-            sCode += '   "use strict";\n';
-            sCode += '   Opa5.createPageObjects({\n';
-            sCode += '      onThe' + sPage + 'Page: {\n';
-            sCode += '         baseClass: Common,\n';
-            sCode += '         viewName: "' + sPage + '",\n';
-            sCode += '         actions: {},\n';
-            sCode += '         assertions: {}\n';
-            sCode += '      }\n';
-            sCode += '   });\n';
-            sCode += '});';
-            aCodes.push({
-                codeName: "Page Code (" + sPage + ")",
-                code: sCode,
-                type: "CODE",
-                order: 2
-            });
-        }
-
-        aCodes = aCodes.sort(function (aObj, bObj) {
-            if (aObj.order <= bObj.order) {
-                return -1;
-            }
-            return 1;
-        });
-        return aCodes;
-    };
-
     TestDetails.prototype._updatePreview = function () {
         var aStoredItems = this.getModel("navModel").getProperty("/elements");
-
-        var sCodeLanguage = this._oModel.getProperty("/codeSettings/language");
-        if (sCodeLanguage === "OPA") {
-            this._oModel.setProperty("/codes", this._opaGetCode(aStoredItems));
-        } else {
-            //testcafe by default
-            this._oModel.setProperty("/codes", this._testCafeGetCode(aStoredItems));
-        }
+        this._oModel.setProperty("/codes", CodeHelper.getFullCode(this.getModel("viewModel").getProperty("/codeSettings"), aStoredItems));
     };
-
     TestDetails.prototype.onContinueRecording = function () {
         this._oRecordDialog.open();
         RecordController.startRecording();
     };
 
-    TestDetails.prototype._showItemControl = function (oControl) {
-        var oJQ = $(oControl.getDomRef());
-        var oJQDialog = $(this._oDialog.getDomRef());
-        var oOldWithControl = $(".HVRReveal");
-        oOldWithControl.removeClass("HVRReveal");
-        oJQ.addClass("HVRReveal");
-
-        oJQDialog.fadeOut(function () {
-            oJQDialog.delay(500).fadeIn(function () {
-                oJQ.removeClass("HVRReveal");
-                oOldWithControl.addClass("HVRReveal");
-            });
-        });
-    };
-
-    TestDetails.prototype._getAssertDefinition = function (oElement) {
-        var sBasisCode = "";
-        var sCode = "";
-        var aAsserts = oElement.assertFilter;
-        var oAssertScope = {};
-        var sAssertType = oElement.property.assKey;
-        var sAssertMsg = oElement.property.assertMessage;
-        var aCode = [];
-        var sAssertCount = oElement.property.assKeyMatchingCount;
-        var aReturnCodeSimple = [];
-
-        if (sAssertType === 'ATTR') {
-            sBasisCode += ".getUI5(" + "({ element }) => element.";
-            for (var x = 0; x < aAsserts.length; x++) {
-                oAssertScope = {}; //reset per line..
-                var oAssert = aAsserts[x];
-
-                var oAssertLocalScope = this._attributeTypes[oAssert.attributeType].getAssertScope(oAssertScope);
-                var oAssertSpec = this._getValueSpec(oAssert, oElement.item);
-                if (oAssertSpec === null) {
-                    continue;
-                }
-
-                var sAssertFunc = "";
-                if (oAssert.operatorType == 'EQ') {
-                    sAssertFunc = 'eql'
-                } else if (oAssert.operatorType === 'NE') {
-                    sAssertFunc = 'notEql'
-                } else if (oAssert.operatorType === 'CP') {
-                    sAssertFunc = 'contains'
-                } else if (oAssert.operatorType === 'NP') {
-                    sAssertFunc = 'notContains'
-                }
-
-
-
-                var sAddCode = sBasisCode;
-                var sAssertCode = oAssertSpec.assert();
-                sAddCode += sAssertCode;
-
-                aReturnCodeSimple.push({
-                    assertType: oAssert.operatorType,
-                    assertLocation: sAssertCode,
-                    assertValue: oAssert.criteriaValue
-                });
-
-                sAddCode += "))" + "." + sAssertFunc + "(" + "'" + oAssert.criteriaValue + "'";
-                if (sAssertMsg !== "") {
-                    sAddCode += "," + '"' + sAssertMsg + '"';
-                }
-                sAddCode += ")";
-                aCode.push(sAddCode);
-            }
-        } else if (sAssertType === "EXS") {
-            sCode = sBasisCode + ".exists).ok(";
-            if (sAssertMsg !== "") {
-                sCode += '"' + sAssertMsg + '"';
-            }
-            sCode += ")";
-            aCode.push(sCode);
-        } else if (sAssertType === "MTC") {
-            sCode = sBasisCode + ".count).eql(" + parseInt(sAssertCount, 10) + "";
-            if (sAssertMsg !== "") {
-                sCode += "," + '"' + sAssertMsg + '"';
-            }
-            sCode += ")";
-            aCode.push(sCode);
-        }
-
-        return {
-            code: aCode,
-            assertType: sAssertType,
-            assertMsg: sAssertMsg,
-            assertCode: aReturnCodeSimple,
-            assertMatchingCount: sAssertCount,
-            assertScope: oAssertLocalScope
-        }
-    };
-
-    TestDetails.prototype._getSelectorToJSONStringRec = function (oObject) {
-        var sStringCurrent = "";
-        var bFirst = true;
-        for (var s in oObject) {
-            var obj = oObject[s];
-            if (!bFirst) {
-                sStringCurrent += ", ";
-            }
-            bFirst = false;
-            if (Array.isArray(obj)) {
-                sStringCurrent += "[";
-                for (var i = 0; i < obj.length; i++) {
-                    if (i > 0) {
-                        sStringCurrent += ",";
-                    }
-                    sStringCurrent += this._getSelectorToJSONStringRec(obj[i]);
-                }
-                sStringCurrent += "]";
-            } else if (typeof obj === "object") {
-                sStringCurrent += s + ": { ";
-                sStringCurrent += this._getSelectorToJSONStringRec(obj);
-                sStringCurrent += " }";
-            } else {
-                if (this._oJSRegex.test(s) === false) {
-                    s = '"' + s + '"';
-                }
-                sStringCurrent += s;
-                sStringCurrent += " : ";
-                if (typeof obj === "boolean") {
-                    sStringCurrent += obj;
-                } else if (typeof obj === "number") {
-                    sStringCurrent += obj;
-                } else {
-                    sStringCurrent += '\"' + obj + '"';
-                }
-            }
-        }
-        return sStringCurrent;
-    };
-
-    TestDetails.prototype._getSelectorToJSONString = function (oObject) {
-        this._oJSRegex = /^[_$a-zA-Z\xA0-\uFFFF][_$a-zA-Z0-9\xA0-\uFFFF]*$/; //this is not perfect - we are working with predefined names, which are not getting "any" syntax though
-        return "{ " + this._getSelectorToJSONStringRec(oObject) + " }";
-    };
-
-    TestDetails.prototype._getOPACodeFromItem = function (oElement) {
-        var sCode = "";
-        var aCode = [];
-
-        var oSelector = oElement.selector;
-        var sType = oElement.property.type; // SEL | ACT | ASS
-        var sActType = oElement.property.actKey; //PRS|TYP
-
-        //(1) first: build up the actual selector
-        var sSelectorAttributes = "";
-
-        sSelectorAttributes = oSelector.selectorAttributesStringified;
-        var sSelectorFinal = sSelectorAttributes;
-        if (!oElement.item.viewProperty.localViewName) {
-            oElement.item.viewProperty.localViewName = "Unknown";
-        }
-        var sCurrentPage = oElement.item.viewProperty.localViewName;
-        sCurrentPage = "onThe" + sCurrentPage + "Page";
-
-        var sAction = "";
-        if (sType === 'ACT') {
-            sCode = "When." + sCurrentPage + ".";
-            switch (sActType) {
-                case "PRS":
-                    sAction = "iPressElement";
-                    break;
-                case "TYP":
-                    sAction = "iEnterText";
-                    break;
-                default:
-                    return "";
-            }
-
-            sCode = sCode + sAction + "(" + sSelectorFinal;
-            if (sActType == "TYP") {
-                sCode = sCode + ',"' + oElement.property.selectActInsert + '"';
-            }
-            sCode = sCode + ");";
-            aCode = [sCode];
-        } else if (sType === 'ASS') {
-            if (oElement.assertion.assertType === "ATTR") {
-                for (var i = 0; i < oElement.assertion.assertCode.length; i++) {
-                    var oAss = oElement.assertion.assertCode[i];
-
-                    // we could make 100 of mock methods here to make that more OPA style.. but...ya..
-                    sCode = "Then." + sCurrentPage + ".theExpactationIs(" + sSelectorFinal + ",'" + oAss.assertLocation + "','" + oAss.assertType + "',";
-
-                    if (typeof oAss.assertValue === "boolean") {
-                        sCode += oAss.assertValue;
-                    } else if (typeof oAss.assertValue === "number") {
-                        sCode += oAss.assertValue;
-                    } else {
-                        sCode += '"' + oAss.assertValue + '"';
-                    }
-                    sCode += ");"
-
-                    aCode.push(sCode);
-                }
-            } else if (oElement.assertion.assertType === "EXS") {
-                sCode = "Then." + sCurrentPage + ".theElementIsExisting(" + sSelectorFinal + ");"
-                aCode = [sCode];
-            } else if (oElement.assertion.assertType === "MTC") {
-                sCode = "Then." + sCurrentPage + ".theElementIsExistingNTimes(" + sSelectorFinal + "," + oElement.assertion.assertMatchingCount + ");"
-                aCode = [sCode];
-            }
-        }
-
-        return aCode;
-    };
 
     TestDetails.prototype.onDeleteStep = function (oEvent) {
         var aItem = oEvent.getSource().getBindingContext("navModel").getPath().split("/");
@@ -823,71 +438,6 @@ sap.ui.define([
             TestId: this.getModel("navModel").getProperty("/test/uuid"),
             ElementId: this._iCurrentStep
         });
-    };
-
-    TestDetails.prototype._getCodeFromItem = function (oElement) {
-        var sCode = "";
-        var aCode = [];
-        //get the actual element - this might seem a little bit superflicious, but is very helpful for exporting/importing (where the references are gone)
-        var oSelector = oElement.selector;
-        var sType = oElement.property.type; // SEL | ACT | ASS
-        var sActType = oElement.property.actKey; //PRS|TYP
-
-        //(1) first: build up the actual selector
-        var sSelector = "";
-        var sSelectorAttributes = "";
-
-        sSelector = oSelector.selector;
-        sSelectorAttributes = oSelector.selectorAttributesStringified;
-        var sSelectorFinal = sSelector + "(" + sSelectorAttributes + ")";
-
-        var sAction = "";
-        if (sType === "SEL") {
-            sCode = "await " + sSelectorFinal + ";";
-            aCode = [sCode];
-        } else if (sType === 'ACT') {
-            sCode = "await t.";
-            switch (sActType) {
-                case "PRS":
-                    sAction = "click";
-                    break;
-                case "TYP":
-                    sAction = "typeText";
-                    break;
-                default:
-                    return "";
-            }
-
-            if (sActType === "TYP" && oElement.property.selectActInsert.length === 0) {
-                //there is no native clearing.. :-) we have to select the next and press the delete key.. yeah
-                //we do not have to check "replace text" - empty text means ALWAYS replace
-                sCode = "await t.selectText(" + sSelectorFinal + ");";
-                aCode = [sCode];
-                sCode = "await t.pressKey('delete');"
-                aCode.push(sCode);
-            } else {
-                sCode = sCode + sAction + "(" + sSelectorFinal;
-                if (sActType == "TYP") {
-                    sCode = sCode + ',"' + oElement.property.selectActInsert + '"';
-                    if (oElement.property.actionSettings.pasteText === true || oElement.property.actionSettings.testSpeed !== 1 || oElement.property.actionSettings.replaceText === true) {
-                        sCode += ", { paste: " + oElement.property.actionSettings.pasteText + ", speed: " + oElement.property.actionSettings.testSpeed + ", replace: " + oElement.property.actionSettings.replaceText + " }"
-                    }
-                }
-                sCode = sCode + ");";
-                aCode = [sCode];
-            }
-        } else if (sType === 'ASS') {
-            for (var i = 0; i < oElement.assertion.code.length; i++) {
-                sCode = "await t." + "expect(" + sSelectorFinal + oElement.assertion.code[i] + ";";
-                aCode.push(sCode);
-            }
-        }
-
-        if (oElement.property.actionSettings.blur) {
-            aCode.push('await t.click(Selector(".sapUiBody"));'); //this is just a dummy.. a utils method fireing a "blur" would be better..
-        }
-
-        return aCode;
     };
 
     TestDetails.prototype.onUpdatePreview = function () {

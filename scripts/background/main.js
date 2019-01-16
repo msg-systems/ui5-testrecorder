@@ -1,7 +1,26 @@
+var bInitialized = false;
+var bNextImmediateStart = false;
+
+chrome.contextMenus.create({
+	title: "Create Element Selector",
+	contexts: ["selection", "page", "link"],
+	onclick: function (e) {
+		chrome.tabs.getSelected(null, function (tab) {
+			createAndStart(tab, true);
+		});
+	}
+});
+
+
 chrome.browserAction.onClicked.addListener(function (tab) {
-	//in case the mentioned tab is closed, we will also close our own - it doesn't make much sense, as we anyways only have "own tab authorization"
+	createAndStart(tab, false);
+});
+
+function createAndStart(tab, bStartSelectImmediate) {
 	var sOurTabId = tab.id;
 	var sOurWindowId = 0;
+	bNextImmediateStart = bStartSelectImmediate;
+
 	chrome.tabs.onRemoved.addListener(function (tabId, info) {
 		if (tabId === sOurTabId) {
 			chrome.windows.remove(sOurWindowId);
@@ -18,15 +37,19 @@ chrome.browserAction.onClicked.addListener(function (tab) {
 			focused: true
 		}, function (fnWindow) {
 			sOurWindowId = fnWindow.id;
-			chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-				if (message.type === "HandshakeToWindow") {
-					chrome.runtime.sendMessage({
-						"type": "send-window-id",
-						"windowid" : fnWindow.id
-					}, function (response) {
-					});
-				}
-			});
+			if (bInitialized === false) {
+				bInitialized = true;
+				chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+					if (message.type === "HandshakeToWindow") {
+						chrome.runtime.sendMessage({
+							"type": "send-window-id",
+							"windowid": sender.tab.windowId,
+							"startImmediate": bNextImmediateStart
+						}, function (response) {
+						});
+					}
+				});
+			}
 		});
 	});
-});
+}

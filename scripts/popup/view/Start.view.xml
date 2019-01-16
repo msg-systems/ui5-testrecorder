@@ -35,6 +35,14 @@
                         <FlexItemData alignSelf="Center"/>
                     </layoutData>
                 </GenericTile>
+                <GenericTile class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" header="OData-Explorer" press="onMockserver">
+                    <TileContent>
+                        <ImageContent src="sap-icon://database" />
+                    </TileContent>
+                    <layoutData>
+                        <FlexItemData alignSelf="Center"/>
+                    </layoutData>
+                </GenericTile>
                 <layoutData>
                     <FlexItemData alignSelf="Center"/>
                 </layoutData>

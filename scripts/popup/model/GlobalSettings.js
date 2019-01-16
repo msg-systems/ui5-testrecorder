@@ -8,12 +8,16 @@ sap.ui.define([
         constructor: function () {
             var oJSON = {
                 settings: {
-                    defaultLanguage: "TCF"
+                    defaultLanguage: "UI5"
                 },
                 settingsDefault: {
-                    defaultLanguage: "TCF"
+                    defaultLanguage: "UI5"
                 },
                 codeLanguages: [
+                    {
+                        key: "UI5",
+                        text: "ui5-uiveri5"
+                    },
                     {
                         key: "TCF",
                         text: "Testcafe (Beta)"
@@ -22,7 +26,7 @@ sap.ui.define([
                         key: "OPA",
                         text: "OPA5 (Alpha)"
                     }
-                ]
+                ],
             };
             this._oModel = new JSONModel(oJSON);
             this.load();

@@ -7,10 +7,12 @@ sap.ui.define([
     'sap/m/MessagePopover',
     'sap/m/MessageItem',
     "sap/m/MessageBox",
+    "com/ui5/testing/model/GlobalSettings",
     "com/ui5/testing/model/Navigation",
     "com/ui5/testing/model/Communication",
-    "com/ui5/testing/model/RecordController"
-], function (Controller, Object, JSONModel, MessageToast, ValueState, MessagePopover, MessageItem, MessageBox, Navigation, Communication, RecordController) {
+    "com/ui5/testing/model/RecordController",
+    "com/ui5/testing/model/CodeHelper"
+], function (Controller, Object, JSONModel, MessageToast, ValueState, MessagePopover, MessageItem, MessageBox, GlobalSettings, Navigation, Communication, RecordController, CodeHelper) {
     "use strict";
 
     var TestHandler = Controller.extend("com.ui5.testing.controller.ui5Testing", {
@@ -25,6 +27,11 @@ sap.ui.define([
                 assertFilter: [], //table entries of asserts,
                 messages: []
             },
+            codeSettings: {
+                language: "UI5"
+            },
+            quickSelect: false,
+            code: "",
             elements: [],
             elementLength: 0,
             elementDefault: {
@@ -59,16 +66,6 @@ sap.ui.define([
             dynamic: {
                 attrType: []
             },
-            codeLanguages: [
-                {
-                    key: "TCF",
-                    text: "Testcafe (Beta)"
-                },
-                {
-                    key: "OPA",
-                    text: "OPA5 (Alpha)"
-                }
-            ],
             statics: {
                 supportRules: [],
                 type: [
@@ -126,7 +123,9 @@ sap.ui.define([
             this._getCriteriaTypes();
             this._initMessagePopover();
             this.getView().setModel(this._oModel, "viewModel");
+            this.getView().setModel(GlobalSettings.getModel(), "settingsModel");
             this.getRouter().getRoute("elementCreate").attachPatternMatched(this._onObjectMatched, this);
+            this.getRouter().getRoute("elementCreateQuick").attachPatternMatched(this._onObjectMatchedQuick, this);
             this.getRouter().getRoute("elementDisplay").attachPatternMatched(this._onObjectMatchedInReplay, this);
 
             this.getView().setModel(RecordController.getModel(), "recordModel");
@@ -138,6 +137,20 @@ sap.ui.define([
     TestHandler.prototype._onObjectMatched = function (oEvent) {
         this._sTestId = oEvent.getParameter("arguments").TestId;
         this._bReplayMode = false;
+        this._oModel.setProperty("/quickMode", false);
+        this._oModel.setProperty("/replayMode", false);
+        var oItem = Navigation.getSelectedItem();
+        if (!oItem || JSON.stringify(oItem) == "{}") {
+            this.getRouter().navTo("start");
+            return;
+        }
+        this.onClick(oItem);
+    };
+
+    TestHandler.prototype._onObjectMatchedQuick = function (oEvent) {
+        this._sTestId = oEvent.getParameter("arguments").TestId;
+        this._bReplayMode = false;
+        this._oModel.setProperty("/quickMode", true);
         this._oModel.setProperty("/replayMode", false);
         var oItem = Navigation.getSelectedItem();
         if (!oItem || JSON.stringify(oItem) == "{}") {
@@ -154,6 +167,7 @@ sap.ui.define([
         var aItems = this.getModel("navModel").getProperty("/elements");
         var oItem = aItems[this._sElementId];
         this._oModel.setProperty("/element", oItem);
+        this._oModel.setProperty("/quickMode", false);
         this._oModel.setProperty("/replayMode", true);
         this._updateSubActionTypes(false);
         this._adjustDomChildWith(this._oModel.getProperty("/element/item"));
@@ -293,6 +307,88 @@ sap.ui.define([
         this._oSelectDialog.addStyleClass("sapUiSizeCompact");
     };
 
+    TestHandler.prototype._getAssertDefinition = function (oElement) {
+        var sBasisCode = "";
+        var sCode = "";
+        var aAsserts = oElement.assertFilter;
+        var oAssertScope = {};
+        var sAssertType = oElement.property.assKey;
+        var sAssertMsg = oElement.property.assertMessage;
+        var aCode = [];
+        var sAssertCount = oElement.property.assKeyMatchingCount;
+        var aReturnCodeSimple = [];
+
+        if (sAssertType === 'ATTR') {
+            sBasisCode += ".getUI5(" + "({ element }) => element.";
+            for (var x = 0; x < aAsserts.length; x++) {
+                oAssertScope = {}; //reset per line..
+                var oAssert = aAsserts[x];
+
+                var oAssertLocalScope = this._attributeTypes[oAssert.attributeType].getAssertScope(oAssertScope);
+                var oAssertSpec = this._getValueSpec(oAssert, oElement.item);
+                if (oAssertSpec === null) {
+                    continue;
+                }
+
+                var sAssertFunc = "";
+                if (oAssert.operatorType == 'EQ') {
+                    sAssertFunc = 'eql'
+                } else if (oAssert.operatorType === 'NE') {
+                    sAssertFunc = 'notEql'
+                } else if (oAssert.operatorType === 'CP') {
+                    sAssertFunc = 'contains'
+                } else if (oAssert.operatorType === 'NP') {
+                    sAssertFunc = 'notContains'
+                }
+
+
+
+                var sAddCode = sBasisCode;
+                var sAssertCode = oAssertSpec.assert();
+                sAddCode += sAssertCode;
+
+                aReturnCodeSimple.push({
+                    assertType: oAssert.operatorType,
+                    assertLocation: sAssertCode,
+                    assertOperator: oAssert.operatorType,
+                    assertValue: oAssert.criteriaValue,
+                    assertField: oAssertSpec.assertField(),
+                    assertMsg: sAssertMsg
+                });
+
+                sAddCode += "))" + "." + sAssertFunc + "(" + "'" + oAssert.criteriaValue + "'";
+                if (sAssertMsg !== "") {
+                    sAddCode += "," + '"' + sAssertMsg + '"';
+                }
+                sAddCode += ")";
+                aCode.push(sAddCode);
+            }
+        } else if (sAssertType === "EXS") {
+            sCode = sBasisCode + ".exists).ok(";
+            if (sAssertMsg !== "") {
+                sCode += '"' + sAssertMsg + '"';
+            }
+            sCode += ")";
+            aCode.push(sCode);
+        } else if (sAssertType === "MTC") {
+            sCode = sBasisCode + ".count).eql(" + parseInt(sAssertCount, 10) + "";
+            if (sAssertMsg !== "") {
+                sCode += "," + '"' + sAssertMsg + '"';
+            }
+            sCode += ")";
+            aCode.push(sCode);
+        }
+
+        return {
+            code: aCode,
+            assertType: sAssertType,
+            assertMsg: sAssertMsg,
+            assertCode: aReturnCodeSimple,
+            assertMatchingCount: sAssertCount,
+            assertScope: oAssertLocalScope
+        }
+    };
+
     TestHandler.prototype._adjustBeforeSaving = function (oElement) {
         //what we are actually saving, is an extremly reduced form, of everything we need for code generation
         var oReturn = {
@@ -307,6 +403,7 @@ sap.ui.define([
             hash: "",
             stepExecuted: true
         };
+
         return new Promise(function (resolve, reject) {
             Communication.fireEvent("getwindowinfo").then(function (oData) {
                 if (!oData) {
@@ -329,6 +426,16 @@ sap.ui.define([
             }, true);
         }
         RecordController.startRecording();
+    };
+
+    TestHandler.prototype._onStopFromQuick = function () {
+        RecordController.stopRecording();
+        window.close();
+    };
+
+    TestHandler.prototype._onNewStepFromQuick = function () {
+        this.getRouter().navTo("testDetailsCreateQuick", {
+        }, true);
     };
 
     TestHandler.prototype._onSave = function () {
@@ -373,9 +480,16 @@ sap.ui.define([
                 resolve();
                 return false;
             }
-            Communication.fireEvent("execute", {
-                element: oElement
-            }).then(resolve);
+            this._getFoundElements().then(function (aElements) {
+                if (aElements.length === 0) {
+                    resolve();
+                    return;
+                }
+                oElement.item.identifier = aElements[0].identifier;
+                Communication.fireEvent("execute", {
+                    element: oElement
+                }).then(resolve);
+            });
         }.bind(this));
     };
 
@@ -475,18 +589,21 @@ sap.ui.define([
 
     TestHandler.prototype._updatePreview = function () {
         var oItem = this._oModel.getProperty("/element");
-        oItem = this._adjustBeforeSaving(oItem);
-
-        this._getFoundElements().then(function (aElements) {
-            this._oModel.setProperty("/element/identifiedElements", aElements);
-            if (aElements.length !== 1) {
-                //we are only expanding, in case we are in ACTION mode - reason: the user has to do sth. in case we are in action mode, as only one can be selected..
-                if (this._oModel.getProperty("/element/property/type") === 'ACT') {
-                    this.byId("atrElementsPnl").setExpanded(true);
+        oItem = this._adjustBeforeSaving(oItem).then(function (oElementFinal) {
+            this._getFoundElements().then(function (aElements) {
+                this._oModel.setProperty("/element/identifiedElements", aElements);
+                if (aElements.length !== 1) {
+                    //we are only expanding, in case we are in ACTION mode - reason: the user has to do sth. in case we are in action mode, as only one can be selected..
+                    if (this._oModel.getProperty("/element/property/type") === 'ACT') {
+                        this.byId("atrElementsPnl").setExpanded(true);
+                    }
                 }
-            }
-            this._checkElementNumber();
-            this._resumePerformanceBindings();
+                this._checkElementNumber();
+                this._resumePerformanceBindings();
+
+                var sLanguage = this._oModel.getProperty("/codeSettings/language");
+                this.getModel("viewModel").setProperty("/code", CodeHelper.getItemCode(sLanguage, oElementFinal).join("\n"));
+            }.bind(this));
         }.bind(this));
     };
 
@@ -572,144 +689,11 @@ sap.ui.define([
         }.bind(this));
     };
 
-    TestHandler.prototype._showItemControl = function (oControl) {
-        var oJQ = $(oControl.getDomRef());
-        var oJQDialog = $(this._oDialog.getDomRef());
-        var oOldWithControl = $(".HVRReveal");
-        oOldWithControl.removeClass("HVRReveal");
-        oJQ.addClass("HVRReveal");
-
-        oJQDialog.fadeOut(function () {
-            oJQDialog.delay(500).fadeIn(function () {
-                oJQ.removeClass("HVRReveal");
-                oOldWithControl.addClass("HVRReveal");
-            });
-        });
-    };
-
     TestHandler.prototype.onShowAssertionIssue = function (oEvent) {
         this._oMessagePopoverAssert.setBindingContext(oEvent.getSource().getBindingContext("viewModel"), "viewModel");
         this._oMessagePopoverAssert.toggle(oEvent.getSource());
     };
 
-    TestHandler.prototype._getAssertDefinition = function (oElement) {
-        var sBasisCode = "";
-        var sCode = "";
-        var aAsserts = oElement.assertFilter;
-        var oAssertScope = {};
-        var sAssertType = oElement.property.assKey;
-        var sAssertMsg = oElement.property.assertMessage;
-        var aCode = [];
-        var sAssertCount = oElement.property.assKeyMatchingCount;
-        var aReturnCodeSimple = [];
-
-        if (sAssertType === 'ATTR') {
-            sBasisCode += ".getUI5(" + "({ element }) => element.";
-            for (var x = 0; x < aAsserts.length; x++) {
-                oAssertScope = {}; //reset per line..
-                var oAssert = aAsserts[x];
-
-                var oAssertLocalScope = this._attributeTypes[oAssert.attributeType].getAssertScope(oAssertScope);
-                var oAssertSpec = this._getValueSpec(oAssert, oElement.item);
-                if (oAssertSpec === null) {
-                    continue;
-                }
-
-                var sAssertFunc = "";
-                if (oAssert.operatorType == 'EQ') {
-                    sAssertFunc = 'eql'
-                } else if (oAssert.operatorType === 'NE') {
-                    sAssertFunc = 'notEql'
-                } else if (oAssert.operatorType === 'CP') {
-                    sAssertFunc = 'contains'
-                } else if (oAssert.operatorType === 'NP') {
-                    sAssertFunc = 'notContains'
-                }
-
-
-
-                var sAddCode = sBasisCode;
-                var sAssertCode = oAssertSpec.assert();
-                sAddCode += sAssertCode;
-
-                aReturnCodeSimple.push({
-                    assertType: oAssert.operatorType,
-                    assertLocation: sAssertCode,
-                    assertValue: oAssert.criteriaValue
-                });
-
-                sAddCode += "))" + "." + sAssertFunc + "(" + "'" + oAssert.criteriaValue + "'";
-                if (sAssertMsg !== "") {
-                    sAddCode += "," + '"' + sAssertMsg + '"';
-                }
-                sAddCode += ")";
-                aCode.push(sAddCode);
-            }
-        } else if (sAssertType === "EXS") {
-            sCode = sBasisCode + ".exists).ok(";
-            if (sAssertMsg !== "") {
-                sCode += '"' + sAssertMsg + '"';
-            }
-            sCode += ")";
-            aCode.push(sCode);
-        } else if (sAssertType === "MTC") {
-            sCode = sBasisCode + ".count).eql(" + parseInt(sAssertCount, 10) + "";
-            if (sAssertMsg !== "") {
-                sCode += "," + '"' + sAssertMsg + '"';
-            }
-            sCode += ")";
-            aCode.push(sCode);
-        }
-
-        return {
-            code: aCode,
-            assertType: sAssertType,
-            assertMsg: sAssertMsg,
-            assertCode: aReturnCodeSimple,
-            assertMatchingCount: sAssertCount,
-            assertScope: oAssertLocalScope
-        }
-    };
-
-    TestHandler.prototype._getSelectorToJSONStringRec = function (oObject) {
-        var sStringCurrent = "";
-        var bFirst = true;
-        for (var s in oObject) {
-            var obj = oObject[s];
-            if (!bFirst) {
-                sStringCurrent += ", ";
-            }
-            bFirst = false;
-            if (Array.isArray(obj)) {
-                sStringCurrent += "[";
-                for (var i = 0; i < obj.length; i++) {
-                    if (i > 0) {
-                        sStringCurrent += ",";
-                    }
-                    sStringCurrent += this._getSelectorToJSONStringRec(obj[i]);
-                }
-                sStringCurrent += "]";
-            } else if (typeof obj === "object") {
-                sStringCurrent += s + ": { ";
-                sStringCurrent += this._getSelectorToJSONStringRec(obj);
-                sStringCurrent += " }";
-            } else {
-                if (this._oJSRegex.test(s) === false) {
-                    s = '"' + s + '"';
-                }
-                sStringCurrent += s;
-                sStringCurrent += " : ";
-                if (typeof obj === "boolean") {
-                    sStringCurrent += obj;
-                } else if (typeof obj === "number") {
-                    sStringCurrent += obj;
-                } else {
-                    sStringCurrent += '\"' + obj + '"';
-                }
-            }
-        }
-        return sStringCurrent;
-    };
 
     TestHandler.prototype.onChangeCriteriaValue = function (oEvent) {
         //reformat to have the correct data type..
@@ -740,11 +724,6 @@ sap.ui.define([
         this.onUpdatePreview();
     };
 
-    TestHandler.prototype._getSelectorToJSONString = function (oObject) {
-        this._oJSRegex = /^[_$a-zA-Z\xA0-\uFFFF][_$a-zA-Z0-9\xA0-\uFFFF]*$/; //this is not perfect - we are working with predefined names, which are not getting "any" syntax though
-        return "{ " + this._getSelectorToJSONStringRec(oObject) + " }";
-    };
-
     TestHandler.prototype.onRunSupportAssistant = function () {
         this._runSupportAssistantForSelElement();
     };
@@ -765,61 +744,81 @@ sap.ui.define([
                     this._oModel.setProperty("/element/supportAssistantResultLength", oStoreIssue.results.length);
                     this._updatePreview();
                 }.bind(this));
-    },
+    };
 
-        TestHandler.prototype._getSelectorDefinition = function (oElement) {
-            var oScope = {};
-            var sSelector = "";
-            var sSelectorAttributes = "";
-            var sSelectorAttributesStringified = null;
-            var sSelectorAttributesBtf = "";
-            var oItem = oElement.item;
-            var sActType = oElement.property.actKey; //PRS|TYP
-            var sSelectType = oElement.property.selectItemBy; //DOM | UI5 | ATTR
-            var sSelectorExtension = oElement.property.domChildWith;
+    TestHandler.prototype._convertValueSpecToUI5 = function (oSpec, oSelectorUI5, oAttribute, oItem) {
+        var oScopeLocal = this._attributeTypes[oAttribute.attributeType].getScope(oSelectorUI5);
+        if (oAttribute.attributeType === "OWN") {
+            oSelectorUI5.own = typeof oSelectorUI5.own !== "undefined" ? oSelectorUI5.own : {};
+            oScopeLocal = oSelectorUI5.own;
+        }
+        oSpec.getUi5Spec(oScopeLocal, oItem);
+    };
 
-            if (sSelectType === "DOM") {
-                sSelector = "Selector";
-                sSelectorAttributes = '#' + oElement.item.identifier.domId + sSelectorExtension;
-                sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
-            } else if (sSelectType === "UI5") {
-                sSelector = "UI5Selector";
-                sSelectorAttributes = oElement.item.identifier.ui5Id + sSelectorExtension;
-                sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
-            } else if (sSelectType === "ATTR") {
-                sSelector = "UI5Selector";
-                var aAttributes = oElement.attributeFilter;
-                if (sSelectorExtension) {
-                    $.extend(true, oScope, {
-                        domChildWith: sSelectorExtension
-                    });
+    TestHandler.prototype._getSelectorDefinition = function (oElement) {
+        var oScope = {};
+        var sSelector = "";
+        var sSelectorAttributes = "";
+        var sSelectorAttributesStringified = null;
+        var sSelectorAttributesBtf = "";
+        var oItem = oElement.item;
+        var sActType = oElement.property.actKey; //PRS|TYP
+        var sSelectType = oElement.property.selectItemBy; //DOM | UI5 | ATTR
+        var sSelectorExtension = oElement.property.domChildWith;
+        var oSelectorUI5 = {
+        };
+
+        if (sSelectType === "DOM") {
+            sSelector = "Selector";
+            sSelectorAttributes = '#' + oElement.item.identifier.domId + sSelectorExtension;
+            sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
+            oSelectorUI5.id = sSelectorAttributes;
+        } else if (sSelectType === "UI5") {
+            sSelector = "UI5Selector";
+            sSelectorAttributes = oElement.item.identifier.ui5Id + sSelectorExtension;
+            sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
+            oSelectorUI5 = {
+                own: {
+                    id: new RegExp(oElement.item.identifier.ui5Id).toString()
                 }
-
-                for (var i = 0; i < aAttributes.length; i++) {
-                    var oAttribute = aAttributes[i];
-                    //get the current item..
-                    var oItemLocal = this._attributeTypes[oAttribute.attributeType].getItem(oItem);
-                    var oSpec = this._getValueSpec(oAttribute, oItemLocal);
-                    if (oSpec === null) {
-                        continue;
-                    }
-                    //extent the current local scope with the code extensions..x
-                    var oScopeLocal = this._attributeTypes[oAttribute.attributeType].getScope(oScope);
-                    $.extend(true, oScopeLocal, oSpec.code(oAttribute.criteriaValue));
-                }
-
-                sSelectorAttributes = oScope;
-                sSelectorAttributesStringified = this._getSelectorToJSONString(oScope); //JSON.stringify(oScope);
-                sSelectorAttributesBtf = JSON.stringify(oScope, null, 2);
+            };
+        } else if (sSelectType === "ATTR") {
+            sSelector = "UI5Selector";
+            var aAttributes = oElement.attributeFilter;
+            if (sSelectorExtension) {
+                $.extend(true, oScope, {
+                    domChildWith: sSelectorExtension
+                });
             }
 
-            return {
-                selectorAttributes: sSelectorAttributes,
-                selectorAttributesStringified: sSelectorAttributesStringified ? sSelectorAttributesStringified : sSelectorAttributes,
-                selectorAttributesBtf: sSelectorAttributesBtf,
-                selector: sSelector
-            };
+            for (var i = 0; i < aAttributes.length; i++) {
+                var oAttribute = aAttributes[i];
+                var oItemLocal = this._attributeTypes[oAttribute.attributeType].getItem(oItem);
+                var oSpec = this._getValueSpec(oAttribute, oItemLocal);
+                if (oSpec === null) {
+                    continue;
+                }
+
+                this._convertValueSpecToUI5(oSpec, oSelectorUI5, oAttribute, oItemLocal);
+
+                //extent the current local scope with the code extensions..x
+                var oScopeLocal = this._attributeTypes[oAttribute.attributeType].getScope(oScope);
+                $.extend(true, oScopeLocal, oSpec.code(oAttribute.criteriaValue));
+            }
+
+            sSelectorAttributes = oScope;
+            sSelectorAttributesStringified = CodeHelper._getSelectorToJSONString(oScope); //JSON.stringify(oScope);
+            sSelectorAttributesBtf = JSON.stringify(oScope, null, 2);
+        }
+
+        return {
+            selectorAttributes: sSelectorAttributes,
+            selectorAttributesStringified: sSelectorAttributesStringified ? sSelectorAttributesStringified : sSelectorAttributes,
+            selectorAttributesBtf: sSelectorAttributesBtf,
+            selector: sSelector,
+            selectorUI5: oSelectorUI5
         };
+    };
     TestHandler.prototype._getValueSpec = function (oLine, oItem) {
         var aCriteriaSettings = this._criteriaTypes[oLine.criteriaType].criteriaSpec(oItem);
         for (var j = 0; j < aCriteriaSettings.length; j++) {
@@ -924,6 +923,12 @@ sap.ui.define([
     TestHandler.prototype._setItem = function (oItem) {
         this._suspendPerformanceBindings();
 
+        if (oItem.aggregationArray) {
+            oItem.aggregation = {};
+            for (var i = 0; i < oItem.aggregationArray.length; i++) {
+                oItem.aggregation[oItem.aggregationArray[i].name] = oItem.aggregationArray[i];
+            }
+        }
         this._oModel.setProperty("/element/item", oItem);
         this._oModel.setProperty("/element/attributeFilter", []);
         this._oModel.setProperty("/element/assertFilter", []);
@@ -1695,6 +1700,12 @@ sap.ui.define([
                         code: function (sValue) {
                             return { identifier: { ui5Id: sValue } }
                         },
+                        getUi5Spec: function (oAdjust, oItem) {
+                            oAdjust.id = {
+                                id: new RegExp(this.value(oItem)).toString(),
+                                __isRegex: true
+                            }
+                        },
                         assert: function (sValue) {
                             return "identifier.ui5Id"
                         }
@@ -1707,8 +1718,20 @@ sap.ui.define([
                         code: function (sValue) {
                             return { identifier: { ui5LocalId: sValue } }
                         },
+                        getUi5Spec: function (oAdjust, oItem) {
+                            oAdjust.id = {
+                                id: new RegExp(this.value(oItem)).toString(),
+                                __isRegex: true
+                            }
+                        },
                         assert: function (sValue) {
                             return "identifier.ui5LocalId"
+                        },
+                        assertField: function (sValue) {
+                            return {
+                                fn: true,
+                                type: "id"
+                            }
                         }
                     }];
                 }.bind(this)
@@ -1726,8 +1749,17 @@ sap.ui.define([
                         code: function (sValue) {
                             return { metadata: { elementName: sValue } }
                         },
+                        getUi5Spec: function (oAdjust, oItem) {
+                            oAdjust.controlType = this.value(oItem);
+                        },
                         assert: function () {
                             return "metadata.elementName"
+                        },
+                        assertField: function (sValue) {
+                            return {
+                                fn: true,
+                                type: "elementName"
+                            }
                         }
                     }, {
                         subCriteriaType: "CMP",
@@ -1738,8 +1770,17 @@ sap.ui.define([
                         code: function (sValue) {
                             return { metadata: { componentName: sValue } }
                         },
+                        getUi5Spec: function (oAdjust, oItem) {
+                            //not possible..
+                        },
                         assert: function () {
                             return "metadata.componentName"
+                        },
+                        assertField: function (sValue) {
+                            return {
+                                fn: true,
+                                type: "componentName"
+                            }
                         }
                     }];
                 }.bind(this)
@@ -1757,8 +1798,17 @@ sap.ui.define([
                         code: function (sValue) {
                             return { viewProperty: { viewName: sValue } }
                         },
+                        getUi5Spec: function (oAdjust, oItem) {
+                            oAdjust.viewName = this.value(oItem);
+                        },
                         assert: function () {
                             return "viewProperty.viewName"
+                        },
+                        assertField: function (sValue) {
+                            return {
+                                fn: true,
+                                type: "viewName"
+                            }
                         }
                     }, {
                         subCriteriaType: "VIWLNM",
@@ -1769,8 +1819,17 @@ sap.ui.define([
                         code: function (sValue) {
                             return { viewProperty: { localViewName: sValue } }
                         },
+                        getUi5Spec: function (oAdjust, oItem) {
+                            oAdjust.viewName = new RegExp(this.value(oItem)).toString();
+                        },
                         assert: function () {
                             return "viewProperty.localViewName"
+                        },
+                        assertField: function (sValue) {
+                            return {
+                                fn: true,
+                                type: "localViewName"
+                            }
                         }
                     }];
                 }.bind(this)
@@ -1785,6 +1844,7 @@ sap.ui.define([
                         aReturn.push({
                             subCriteriaType: oAggregation.name + "/" + "length",
                             subCriteriaText: oAggregation.name + "/" + "length",
+                            aggregationName: oAggregation.name,
                             code: function (sAggregation, sValue) {
                                 var oReturn = { aggregation: {} };
                                 oReturn.aggregation[sAggregation] = { length: sValue };
@@ -1793,9 +1853,28 @@ sap.ui.define([
                             value: function (sAggregation, oItem) {
                                 return oItem.aggregation[sAggregation].length;
                             }.bind(this, oAggregation.name),
+                            getUi5Spec: function (oAdjust, oItem) {
+                                var iValue = this.value(oItem);
+                                if ( iValue === 0 ) {
+                                    oAdjust.aggregationEmpty = {
+                                        name: this.aggregationName
+                                    }
+                                } else {
+                                    oAdjust.aggregationLengthEquals = {
+                                        name: this.aggregationName,
+                                        value: iValue
+                                    };
+                                }
+                            },
                             assert: function (sAggregation) {
                                 return "aggregation." + sAggregation + "." + "length";
                             }.bind(this, oAggregation.name),
+                            assertField: function (sValue) {
+                                return {
+                                    fn: true,
+                                    type: "aggregation"
+                                }
+                            }
                         });
                     }
                     return aReturn;
@@ -1823,9 +1902,18 @@ sap.ui.define([
                                 value: function (sModel, sProperty, oItem) {
                                     return oItem.context[sModel][sProperty];
                                 }.bind(this, sModel, sProperty),
+                                getUi5Spec: function (oAdjust, oItem) {
+                                    return ""; //not really possible right?
+                                },
                                 assert: function (sModel, sProperty) {
                                     return "context." + sModel + "." + sProperty;
                                 }.bind(this, sModel, sProperty),
+                                assertField: function (sValue) {
+                                    return {
+                                        fn: true,
+                                        type: "context"
+                                    }
+                                }
                             });
                         }
                     }
@@ -1870,9 +1958,18 @@ sap.ui.define([
                                             }
                                             return oItem.model[sModel][sProperty];
                                         }.bind(this, sModel, sProperty),
+                                        getUi5Spec: function (oAdjust, oItem) {
+                                            return ""; //not really possible
+                                        },
                                         assert: function (sModel, sProperty) {
                                             return "model." + sModel + "." + sProperty;
-                                        }.bind(this, sModel, sProperty)
+                                        }.bind(this, sModel, sProperty),
+                                        assertField: function (sValue) {
+                                            return {
+                                                fn: true,
+                                                type: "prop"
+                                            }
+                                        }
                                     });
                                 }
                             }
@@ -1897,12 +1994,26 @@ sap.ui.define([
                                 };
                                 return oReturn;
                             }.bind(this, sBinding),
+                            getUi5Spec: function (oAdjust, oItem) {
+                                //restriction: maximum one binding path apperently?
+                                oAdjust.bindingPath = typeof oAdjust.bindingPath != "undefined" ? oAdjust.bindingPath : {};
+                                oAdjust.bindingPath = {
+                                    propertyPath: this.subCriteriaType,
+                                    path: this.value(oItem)
+                                };
+                            },
                             value: function (subCriteriaType, oItem) {
                                 return oItem.binding[subCriteriaType].path;
                             }.bind(this, sBinding),
                             assert: function (subCriteriaType) {
                                 return "binding." + subCriteriaType + ".path";
-                            }.bind(this, sBinding)
+                            }.bind(this, sBinding),
+                            assertField: function (sValue) {
+                                return {
+                                    fn: true,
+                                    type: "binding"
+                                }
+                            }
                         });
                     }
                     return aReturn;
@@ -1925,9 +2036,21 @@ sap.ui.define([
                             value: function (subCriteriaType, oItem) {
                                 return oItem.property[subCriteriaType];
                             }.bind(this, sProperty),
+                            getUi5Spec: function (oAdjust, oItem) {
+                                oAdjust.properties = typeof oAdjust.properties != "undefined" ? oAdjust.properties : [];
+                                var oProp = {};
+                                oProp[this.subCriteriaType] = this.value(oItem, sProperty);
+                                oAdjust.properties.push(oProp);
+                            },
                             assert: function (subCriteriaType) {
                                 return "property." + subCriteriaType;
-                            }.bind(this, sProperty)
+                            }.bind(this, sProperty),
+                            assertField: function (sValue) {
+                                return {
+                                    fn: false,
+                                    value: this.subCriteriaType
+                                }
+                            }
                         });
                     }
                     return aReturn;
