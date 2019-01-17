@@ -37,7 +37,7 @@
         <semantic:content>
             <Panel expandable="false" expanded="true" width="auto">
                 <headerToolbar>
-                    <Toolbar height="3rem" style="Clear">
+                    <Toolbar active="true" press="onExpandControl" height="3rem" style="Clear">
                         <ToolbarSpacer/>
                         <Button  visible="{= ${viewModel>/quickMode} === true }" type="Reject" text="Cancel" press="_onStopFromQuick"/>
                         <Button  visible="{= ${viewModel>/quickMode} === true }" type="Accept" text="Re-Select" press="_onNewStepFromQuick"/>
@@ -116,7 +116,7 @@
 
             <Panel id="atrElementsPnl" expandable="true" visible="{= ( ${viewModel>/element/property/selectItemBy} === 'ATTR' ) }" expanded="false" width="auto">
                 <headerToolbar>
-                    <Toolbar height="3em" style="Clear">
+                    <Toolbar active="true" press="onExpandControl" height="3em" style="Clear">
                         <content>
                             <ObjectStatus id="attrObjectStatus" text="Attributes ( {= ${viewModel>/element/attributeFilter}.length } )" state="{viewModel>/element/property/elementState}" />
                             <ToolbarSpacer />
@@ -170,7 +170,7 @@
 
             <Panel visible="{= ( ${viewModel>/element/property/type} === 'SUP' ) }" id="pnlSupAssistantRule" expandable="true" expanded="false" width="auto">
                 <headerToolbar>
-                    <Toolbar height="3em" style="Clear">
+                    <Toolbar active="true" press="onExpandControl" height="3em" style="Clear">
                         <content>
                             <ObjectStatus text="Support-Assistant ( {viewModel>/element/supportAssistantResultLength} )" state="{viewModel>/element/property/elementState}" />
                             <ToolbarSpacer />
@@ -221,7 +221,7 @@
 
             <Panel visible="{= ( ${viewModel>/element/property/type} === 'ASS' ) &amp;&amp; ( ${viewModel>/element/property/assKey} === 'ATTR' ) }" expandable="true" expanded="true" width="auto">
                 <headerToolbar>
-                    <Toolbar height="3em" style="Clear">
+                    <Toolbar active="true" press="onExpandControl" height="3em" style="Clear">
                         <content>
                             <ObjectStatus text="Assertions" state="{viewModel>/element/property/elementState}" />
                             <ToolbarSpacer />
@@ -283,7 +283,7 @@
 
             <Panel expandable="true" id="pnlFoundElements" expanded="false" width="auto">
                 <headerToolbar>
-                    <Toolbar height="3rem" style="Clear">
+                    <Toolbar active="true" press="onExpandControl" height="3rem" style="Clear">
                         <ObjectStatus text="Found Items ( {=${viewModel>/element/identifiedElements}.length} )" state="{viewModel>/element/property/elementState}" />
                     </Toolbar>
                 </headerToolbar>
@@ -323,7 +323,7 @@
             </Panel>
             <Panel expandable="true" expanded="true" width="auto">
                 <headerToolbar>
-                    <Toolbar height="3rem" style="Clear">
+                    <Toolbar active="true" press="onExpandControl" height="3rem" style="Clear">
                         <Title titleStyle="H5" text="Code-Preview"/>
                         <ToolbarSpacer/>
                         <Select id="tstLanguage" change="onUpdatePreview" items="{settingsModel>/codeLanguages}" selectedKey="{viewModel>/codeSettings/language}">

@@ -348,12 +348,16 @@ sap.ui.define([
                 var sAssertCode = oAssertSpec.assert();
                 sAddCode += sAssertCode;
 
+                var oUI5Spec = {};
+                oAssertSpec.getUi5Spec(oUI5Spec, oElement.item, oAssert.criteriaValue)
+
                 aReturnCodeSimple.push({
                     assertType: oAssert.operatorType,
                     assertLocation: sAssertCode,
                     assertOperator: oAssert.operatorType,
                     assertValue: oAssert.criteriaValue,
                     assertField: oAssertSpec.assertField(),
+                    assertUI5Spec: oUI5Spec,
                     assertMsg: sAssertMsg
                 });
 
@@ -609,8 +613,21 @@ sap.ui.define([
     };
 
     TestHandler.prototype._findItemAndExclude = function (oSelector) {
-        return Communication.fireEvent("find", oSelector);
-    }
+        return new Promise(function (resolve, reject) {
+            Communication.fireEvent("find", oSelector).then(function (aItemsEnhanced) {
+                for (var i = 0; i < aItemsEnhanced.length; i++) {
+                    var oItem = aItemsEnhanced[i];
+                    if (oItem.aggregationArray) {
+                        oItem.aggregation = {};
+                        for (var j = 0; j < oItem.aggregationArray.length; j++) {
+                            oItem.aggregation[oItem.aggregationArray[j].name] = oItem.aggregationArray[j];
+                        }
+                    }
+                }
+                resolve( aItemsEnhanced );
+            }.bind(this))
+        }.bind(this));
+    };
 
     TestHandler.prototype._getFoundElements = function () {
         var oDefinition = this._getSelectorDefinition(typeof oElement === "undefined" ? this._oModel.getProperty("/element") : oElement);
@@ -756,6 +773,11 @@ sap.ui.define([
         oSpec.getUi5Spec(oScopeLocal, oItem);
     };
 
+    TestHandler.prototype.onExpandControl = function (oEvent) {
+        var oPanel = oEvent.getSource().getParent();
+        oPanel.setExpanded(oPanel.getExpanded() === false);
+    };
+
     TestHandler.prototype._getSelectorDefinition = function (oElement) {
         var oScope = {};
         var sSelector = "";
@@ -780,7 +802,7 @@ sap.ui.define([
             sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
             oSelectorUI5 = {
                 own: {
-                    id: new RegExp(oElement.item.identifier.ui5Id).toString()
+                    id: new RegExp(oElement.item.identifier.ui5Id + "$").toString()
                 }
             };
         } else if (sSelectType === "ATTR") {
@@ -801,11 +823,15 @@ sap.ui.define([
                 }
 
                 this._convertValueSpecToUI5(oSpec, oSelectorUI5, oAttribute, oItemLocal);
+                if (oItemLocal.defaultInteraction) {
+                    oSelectorUI5.interaction = oItemLocal.defaultInteraction;
+                }
 
                 //extent the current local scope with the code extensions..x
                 var oScopeLocal = this._attributeTypes[oAttribute.attributeType].getScope(oScope);
                 $.extend(true, oScopeLocal, oSpec.code(oAttribute.criteriaValue));
             }
+
 
             sSelectorAttributes = oScope;
             sSelectorAttributesStringified = CodeHelper._getSelectorToJSONString(oScope); //JSON.stringify(oScope);
@@ -934,6 +960,7 @@ sap.ui.define([
         this._oModel.setProperty("/element/attributeFilter", []);
         this._oModel.setProperty("/element/assertFilter", []);
 
+        this._adjustPreferredAccess(oItem);
         this._setValidAttributeTypes();
         this._adjustDefaultSettings(oItem).then(function () {
             this._updateValueState(oItem);
@@ -961,7 +988,7 @@ sap.ui.define([
 
     TestHandler.prototype._getMergedClassArray = function (oItem) {
         var aClassArray = this._getClassArray(oItem);
-        var oReturn = { defaultAction: { "": "" }, askForBindingContext: false, preferredProperties: [], cloned: false, defaultAttributes: [], actions: {} };
+        var oReturn = { defaultAction: { "": "" }, askForBindingContext: false, preferredProperties: [], defaultInteraction: null, cloned: false, defaultAttributes: [], actions: {} };
         //merge from button to top (while higher elements are overwriting lower elements)
         for (var i = 0; i < aClassArray.length; i++) {
             var oClass = aClassArray[i];
@@ -973,6 +1000,7 @@ sap.ui.define([
                     domChildWith: "", action: oClass.defaultAction
                 }];
             }
+            oReturn.defaultInteraction = typeof oClass.defaultInteraction !== "undefined" ? oClass.defaultInteraction : null;
             oReturn.cloned = oClass.cloned === true ? true : oReturn.cloned;
             oReturn.preferredProperties = oReturn.preferredProperties.concat(oClass.preferredProperties ? oClass.preferredProperties : []);
             var aElementsAttributes = [];
@@ -1141,6 +1169,26 @@ sap.ui.define([
             }.bind(this));
         }.bind(this));
     };
+
+    TestHandler.prototype._adjustPreferredAccessItem = function (oItem) {
+        if (!oItem) {
+            return null;
+        }
+        var oMerged = this._getMergedClassArray(oItem);
+        if (oMerged.defaultInteraction) {
+            oItem.defaultInteraction = oMerged.defaultInteraction;
+        }
+        return oItem;
+    }
+    TestHandler.prototype._adjustPreferredAccess = function (oItem) {
+        this._adjustPreferredAccessItem(oItem);
+        this._adjustPreferredAccessItem(oItem.parent);
+        this._adjustPreferredAccessItem(oItem.parentL2);
+        this._adjustPreferredAccessItem(oItem.parentL3);
+        this._adjustPreferredAccessItem(oItem.parentL4);
+        this._adjustPreferredAccessItem(oItem.label);
+        this._adjustPreferredAccessItem(oItem.itemdata);
+    }
 
     TestHandler.prototype._adjustDomChildWith = function (oItem) {
         var oMerged = this._getMergedClassArray(oItem);
