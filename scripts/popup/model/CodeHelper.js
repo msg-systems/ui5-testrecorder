@@ -319,7 +319,7 @@ sap.ui.define([
                     //everything which is NOT a property, must be moved..
                     var oAss = oElement.assertion.assertCode[i];
 
-                    if (oAss.assertField.type == "property" ) {
+                    if (oAss.assertField.type == "property") {
                         sCode = "expect(" + sElement + ".asControl().getProperty(\"" + oAss.assertField.value + "\")).toBe(";
 
                         if (typeof oAss.assertValue === "boolean") {
@@ -566,22 +566,32 @@ sap.ui.define([
         return aCode;
     };
 
+    CodeHelper.prototype._getFirstComponent = function (aElements) {
+        var sFirstPage = "";
+        var sFirstComponent = "";
+        for (var i = 0; i < aElements.length; i++) {
+            if (aElements[i].item.metadata.componentId && sFirstComponent.length === 0) {
+                sFirstComponent = aElements[i].item.metadata.componentId;
+                sFirstPage = aElements[i].item.viewProperty.localViewName;
+                break;
+            }
+        }
+
+        return {
+            page: sFirstPage,
+            component: sFirstComponent
+        }
+    };
+
+
     CodeHelper.prototype._groupCodeByCluster = function (aElements) {
         var aCluster = [[]];
         var bNextIsBreak = false;
-        var sFirstComponent = "";
-        var sFirstPage = "";
-        var oFirstComponent = null;
         var aPages = {};
         for (var i = 0; i < aElements.length; i++) {
             if (bNextIsBreak === true) {
                 aCluster.push([]);
                 bNextIsBreak = false;
-            }
-            if (aElements[i].item.metadata.componentId && sFirstComponent.length === 0) {
-                oFirstComponent = aElements[i].item.metadata;
-                sFirstComponent = aElements[i].item.metadata.componentId;
-                sFirstPage = aElements[i].item.viewProperty.localViewName;
             }
             if (typeof aPages[aElements[i].item.viewProperty.localViewName] === "undefined") {
                 aPages[aElements[i].item.viewProperty.localViewName] = {
@@ -626,7 +636,9 @@ sap.ui.define([
 
         //group elements by assertions (Given, When, Then)
         var aCluster = this._groupCodeByCluster(aElements);
-
+        var oPage = this._getFirstComponent(aElements);
+        var sFirstComponent = oPage.component;
+        var sFirstPage = oPage.page;
 
         sCode += '    opaTest("Initialize the Application", function (Given, When, Then) {\n';
         sCode += '        Given.onThe' + sFirstPage + 'Page.iInitializeMockServer().iStartMockServer().\n        iStartTheApp("' + sFirstComponent + '", { hash: "' + aElements[0].hash + '" });\n\n';
@@ -658,8 +670,8 @@ sap.ui.define([
         aCodes.push(oCodeTest);
 
         //create a code per view..
-        for (var sPage in aPages) {
-            var oPage = aPages[sPage];
+        for (var sPage in aCluster) {
+            var oPage = aCluster[sPage];
             sCode = "sap.ui.define([\n";
             sCode += '  "sap/ui/test/Opa5",\n';
             sCode += '  "com/ui5/testing/PageBase"\n';
