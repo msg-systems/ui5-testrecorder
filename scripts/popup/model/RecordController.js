@@ -50,9 +50,15 @@ sap.ui.define([
     };
 
     RecordController.prototype.startRecording = function () {
-        Communication.fireEvent("start");
+        var bStartForControl = Communication.isStartImmediate();
+        Communication.setStartImmediate(false);
+        Communication.fireEvent("start", {
+            startImmediate: typeof bStartForControl !== "undefined" ? bStartForControl : false
+        });
         this._oModel.setProperty("/recording", true);
-        this.focusTargetWindow();
+        if (bStartForControl !== true) {
+            this.focusTargetWindow();
+        }
     };
 
     RecordController.prototype.stopRecording = function () {

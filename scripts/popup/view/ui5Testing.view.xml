@@ -39,8 +39,10 @@
                 <headerToolbar>
                     <Toolbar height="3rem" style="Clear">
                         <ToolbarSpacer/>
-                        <Button id="btClose" type="Reject" text="Cancel" press="_onCancelStep"/>
-                        <Button id="btSave" type="Accept" text="Save Step" press="_onSave"/>
+                        <Button  visible="{= ${viewModel>/quickMode} === true }" type="Reject" text="Cancel" press="_onStopFromQuick"/>
+                        <Button  visible="{= ${viewModel>/quickMode} === true }" type="Accept" text="Re-Select" press="_onNewStepFromQuick"/>
+                        <Button visible="{= ${viewModel>/quickMode} === false }" id="btClose" type="Reject" text="Cancel" press="_onCancelStep"/>
+                        <Button visible="{= ${viewModel>/quickMode} === false }" id="btSave" type="Accept" text="Save Step" press="_onSave"/>
                     </Toolbar>
                 </headerToolbar>
                 <f:SimpleForm editable="true" layout="ResponsiveGridLayout" labelSpanXL="3" labelSpanL="3" labelSpanM="3" labelSpanS="12" adjustLabelSpan="false" emptySpanXL="4" emptySpanL="4" emptySpanM="4" emptySpanS="0" columnsXL="1" columnsL="1" columnsM="1" singleContainerFullSize="false">
@@ -76,7 +78,7 @@
 
 
                         <Label text="Assert-Type" visible="{= ( ${viewModel>/element/property/type} === 'ASS' ) }" />
-                        <Select id="tstAssType" items="{viewModel>/statics/assertType}" visible="{= ( ${viewModel>/element/property/type} === 'ASS' ) }" selectedKey="{viewModel>/element/property/assKey}">
+                        <Select id="tstAssType" change="onUpdatePreview" items="{viewModel>/statics/assertType}" visible="{= ( ${viewModel>/element/property/type} === 'ASS' ) }" selectedKey="{viewModel>/element/property/assKey}">
                             <items>
                                 <core:Item text="{viewModel>text}" key="{viewModel>key}"/>
                             </items>
@@ -89,7 +91,7 @@
                         <Input change="onUpdatePreview" value="{ path: 'viewModel>/element/property/assKeyMatchingCount', type:'sap.ui.model.type.Integer'}" visible="{= ( ${viewModel>/element/property/type} === 'ASS' ) &amp;&amp; ( ${viewModel>/element/property/assKey} === 'MTC' ) }" />
 
                         <Label text="Type-Text" visible="{= ( ${viewModel>/element/property/type} === 'ACT' ) &amp;&amp; ( ${viewModel>/element/property/actKey} === 'TYP' ) }" />
-                        <Input id="inpTypeText" change="onUpdatePreview" value="{viewModel>/element/property/selectActInsert}" visible="{= ( ${viewModel>/element/property/type} === 'ACT' ) &amp;&amp; ( ${viewModel>/element/property/actKey} === 'TYP' ) }"/>
+                        <Input id="inpTypeText" valueLiveUpdate="true" liveChange="onUpdatePreview" change="onUpdatePreview" value="{viewModel>/element/property/selectActInsert}" visible="{= ( ${viewModel>/element/property/type} === 'ACT' ) &amp;&amp; ( ${viewModel>/element/property/actKey} === 'TYP' ) }"/>
 
                         <Label text="Select-By" />
                         <Select id="tstSelectedBy" items="{viewModel>/statics/selType}" change="onTypeChange" selectedKey="{viewModel>/element/property/selectItemBy}">
@@ -319,10 +321,32 @@
                     </Table>
                 </content>
             </Panel>
+            <Panel expandable="true" expanded="true" width="auto">
+                <headerToolbar>
+                    <Toolbar height="3rem" style="Clear">
+                        <Title titleStyle="H5" text="Code-Preview"/>
+                        <ToolbarSpacer/>
+                        <Select id="tstLanguage" change="onUpdatePreview" items="{settingsModel>/codeLanguages}" selectedKey="{viewModel>/codeSettings/language}">
+                            <items>
+                                <core:Item text="{settingsModel>text}" key="{settingsModel>key}"/>
+                            </items>
+                        </Select>
+                    </Toolbar>
+                </headerToolbar>
+                <content>
+                    <code:CodeEditor value="{viewModel>/code}" height="100px" editable="true" type="typescript">
+                        <code:layoutData>
+                            <FlexItemData growFactor="1"/>
+                        </code:layoutData>
+                    </code:CodeEditor>
+                </content>
+            </Panel>
         </semantic:content>
         <semantic:customFooterContent>
-            <Button id="btCloseFt" type="Reject" text="Cancel" press="_onCancelStep"/>
-            <Button id="btSaveFt" type="Accept" text="Save Step" press="_onSave"/>
+            <Button visible="{= ${viewModel>/quickMode} === true }" type="Reject" text="Cancel" press="_onStopFromQuick"/>
+            <Button visible="{= ${viewModel>/quickMode} === true }" type="Accept" text="Re-Select" press="_onNewStepFromQuick"/>
+            <Button visible="{= ${viewModel>/quickMode} === false }" type="Reject" text="Cancel" press="_onCancelStep"/>
+            <Button visible="{= ${viewModel>/quickMode} === false }" type="Accept" text="Save Step" press="_onSave"/>
         </semantic:customFooterContent>
     </semantic:FullscreenPage>
 </mvc:View>

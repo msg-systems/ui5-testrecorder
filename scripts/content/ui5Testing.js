@@ -27,7 +27,7 @@
                     if (!oXMLEvent.detail.ok) {
                         reject();
                     }
-                    resolve();
+                    resolve(oXMLEvent.detail);
                 });
             });
 
@@ -36,9 +36,9 @@
                 document.dispatchEvent(new CustomEvent('do-ui5-init'));
             };
 
-            oInitializedPromise.then(function () {
+            oInitializedPromise.then(function (oVers) {
                 //(1) inform popup, that we are loaded.. yay..
-                chrome.runtime.sendMessage({ type: "loaded", data: { ok: true } }, function (response) {
+                chrome.runtime.sendMessage({ type: "loaded", data: { ok: true, version: oVers.version } }, function (response) {
                 });
 
                 var oLastDom = null;
@@ -66,28 +66,35 @@
                 //forewarding from extension to injection...
                 chrome.runtime.onMessage.addListener(
                     function (request, sender, sendResponse) {
-                        if (request.type && request.type === "ui5-check-if-injected" ) {
+                        if (request.type && request.type === "ui5-check-if-injected") {
                             sendResponse({
                                 injected: true
                             });
                         }
                         setTimeout(function () {
+
                             if (request.type) {
                                 oLastAnswer[request.uuid] = { data: null, uuid: request.uuid, resolver: sendResponse };
+                                var bSend = false;
+                                if (request.type == "start" && request.data && request.data.startImmediate == true) {
+                                    if (oLastDom) {
+                                        request.data = {
+                                            startImmediate: true,
+                                            domId : oLastDom.id
+                                        };
+                                        document.dispatchEvent(new CustomEvent('do-ui5-from-extension-to-inject', { detail: request }));
+                                        bSend = true;
+                                    }
+                                }
 
-                                document.dispatchEvent(new CustomEvent('do-ui5-from-extension-to-inject', { detail: request }));
-
+                                if (bSend == false) {
+                                    document.dispatchEvent(new CustomEvent('do-ui5-from-extension-to-inject', { detail: request }));
+                                }
                                 sendResponse({
                                     data: {
                                         asyncAnswer: true
                                     }
                                 });
-                            }
-                            if (request.startForControl) {
-                                if (oLastDom) {
-                                    document.dispatchEvent(new CustomEvent('do-ui5-start', { detail: { domId: oLastDom.id } }));
-                                    return;
-                                }
                             }
                         });
 

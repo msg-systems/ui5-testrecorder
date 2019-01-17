@@ -7,22 +7,41 @@ sap.ui.define([
         _aEvents: {},
         _oUUIDs: {},
         _sTabId: "",
-        constructor : function() {
+        _bStartImmediate: false,
+        _initPromise: null,
+        constructor: function () {
+            var that = this;
             this._oWindowId = null;
-            chrome.runtime.onMessage.addListener(
-                function (request, sender, sendResponse) {
-                    if (request && request.type === "send-window-id") {
-                        this._oWindowId = request.windowid;
-                    }
-                }.bind(this)
-            );
-            chrome.runtime.sendMessage({ type: "HandshakeToWindow" }, function (response) {
-                //ask to get our window id
-            }.bind(this));
+            this._initPromise = new Promise(function (resolve, reject) {
+                chrome.runtime.onMessage.addListener(
+                    function (request, sender, sendResponse) {
+                        if (request && request.type === "send-window-id") {
+                            that._oWindowId = request.windowid;
+                            that._bStartImmediate = request.startImmediate;
+                            resolve();
+                        }
+                    }.bind(this)
+                );
+                chrome.runtime.sendMessage({ type: "HandshakeToWindow" }, function (response) {
+                    //ask to get our window id
+                }.bind(this));
+            }.bind(this))
         }
     });
 
-    Messaging.prototype.getOwnWindowId = function() {
+    Messaging.prototype.isInitialized = function () {
+        return this._initPromise;
+    };
+
+    Messaging.prototype.isStartImmediate = function () {
+        return this._bStartImmediate;
+    };
+
+    Messaging.prototype.setStartImmediate = function (bImmediate) {
+        this._bStartImmediate = bImmediate;
+    };
+
+    Messaging.prototype.getOwnWindowId = function () {
         return this._oWindowId;
     };
 
@@ -38,7 +57,7 @@ sap.ui.define([
     Messaging.prototype.fireEventToExtension = function (oEvent) {
         var sEventType = oEvent.type;
         var oResponse = {};
-        if ( sEventType === "answer-async" ) {
+        if (sEventType === "answer-async") {
             this._handleAsyncAnswer(oEvent.data);
             return;
         }
@@ -50,7 +69,7 @@ sap.ui.define([
         }
     };
 
-    Messaging.prototype._handleAsyncAnswer = function(oData) {
+    Messaging.prototype._handleAsyncAnswer = function (oData) {
         if (!this._oUUIDs[oData.uuid]) {
             return;
         }
@@ -81,16 +100,16 @@ sap.ui.define([
             };
             this._oUUIDs[oEvent.uuid] = {};
             this._oUUIDs[oEvent.uuid].resolveFn = resolve;
-            
+
             chrome.tabs.sendMessage(this._sTabId, oEvent, function (response) {
                 oEvent = oEvent;
-                if (response && response.data && response.data.asyncAnswer === true ) {
+                if (response && response.data && response.data.asyncAnswer === true) {
                     return; //answer will follow, but async..
                 }
                 if (!response) {
                     return;
                 }
-                
+
                 if (response && response.data) {
                     this._oUUIDs[response.uuid].resolveFn(response.data);
                 } else {

@@ -20,9 +20,9 @@
                         <f:SimpleForm editable="true" layout="ResponsiveGridLayout" labelSpanXL="3" labelSpanL="3" labelSpanM="3" labelSpanS="12" adjustLabelSpan="false" emptySpanXL="4" emptySpanL="4" emptySpanM="4" emptySpanS="0" columnsXL="1" columnsL="1" columnsM="1" singleContainerFullSize="false">
                             <f:content>
                                 <Label text="Language" required="true"/>
-                                <Select id="tstLanguage" change="onUpdatePreview" items="{viewModel>/codeLanguages}" selectedKey="{viewModel>/codeSettings/language}">
+                                <Select id="tstLanguage" change="onUpdatePreview" items="{settingsModel>/codeLanguages}" selectedKey="{viewModel>/codeSettings/language}">
                                     <items>
-                                        <core:Item text="{viewModel>text}" key="{viewModel>key}"/>
+                                        <core:Item text="{settingsModel>text}" key="{settingsModel>key}"/>
                                     </items>
                                 </Select>
 
@@ -48,7 +48,7 @@
                         <Panel expandable="true" expanded="true" width="auto">
                             <headerToolbar>
                                 <Toolbar height="3rem" style="Clear">
-                                    <Title text="Steps ( {= ${navModel>/elementLength} } )" />
+                                    <Title titleStyle="H5" text="Steps ( {= ${navModel>/elementLength} } )" />
                                 </Toolbar>
                             </headerToolbar>
                             <content>

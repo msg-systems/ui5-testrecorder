@@ -90,9 +90,19 @@ sap.ui.define([
                                 "target": "elementCreate"
                             },
                             {
+                                "pattern": "/testDetails/{TestId}/elementCreateQuick/{ElementId}",
+                                "name": "elementCreateQuick",
+                                "target": "elementCreateQuick"
+                            }, 
+                            {
                                 "pattern": "/elementDisplay/{TestId}/{ElementId}",
                                 "name": "elementDisplay",
                                 "target": "elementDisplay"
+                            },
+                            {
+                                "pattern": "/mockserver",
+                                "name": "mockserver",
+                                "target": "mockserver"
                             },
                             {
                                 "pattern": "/testDetails/{TestId}",
@@ -108,6 +118,11 @@ sap.ui.define([
                                 "pattern": "/testDetailsCreate",
                                 "name": "testDetailsCreate",
                                 "target": "testDetailsCreate"
+                            },
+                            {
+                                "pattern": "/testDetailsCreateQuick",
+                                "name": "testDetailsCreateQuick",
+                                "target": "testDetailsCreateQuick"
                             },
                             {
                                 "pattern": "",
@@ -132,6 +147,18 @@ sap.ui.define([
                                 "viewId": "ui5Testing",
                                 "controlAggregation": "pages"
                             },
+                            "elementCreateQuick": {
+                                "viewName": "ui5Testing",
+                                "viewLevel": 1,
+                                "viewId": "ui5Testing",
+                                "controlAggregation": "pages"
+                            }, 
+                            "mockserver": {
+                                "viewName": "mockserver",
+                                "viewLevel": 1,
+                                "viewId": "mockserver",
+                                "controlAggregation": "pages"
+                            },
                             "elementDisplay": {
                                 "viewName": "ui5Testing",
                                 "viewLevel": 1,
@@ -151,6 +178,12 @@ sap.ui.define([
                                 "controlAggregation": "pages"
                             },
                             "testDetailsCreate": {
+                                "viewName": "testDetails",
+                                "viewLevel": 1,
+                                "viewId": "testDetails",
+                                "controlAggregation": "pages"
+                            },
+                            "testDetailsCreateQuick": {
                                 "viewName": "testDetails",
                                 "viewLevel": 1,
                                 "viewId": "testDetails",

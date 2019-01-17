@@ -7,10 +7,12 @@ sap.ui.define([
     'sap/m/MessagePopover',
     'sap/m/MessageItem',
     "sap/m/MessageBox",
+    "com/ui5/testing/model/GlobalSettings",
     "com/ui5/testing/model/Navigation",
     "com/ui5/testing/model/Communication",
-    "com/ui5/testing/model/RecordController"
-], function (Controller, Object, JSONModel, MessageToast, ValueState, MessagePopover, MessageItem, MessageBox, Navigation, Communication, RecordController) {
+    "com/ui5/testing/model/RecordController",
+    "com/ui5/testing/model/CodeHelper"
+], function (Controller, Object, JSONModel, MessageToast, ValueState, MessagePopover, MessageItem, MessageBox, GlobalSettings, Navigation, Communication, RecordController, CodeHelper) {
     "use strict";
 
     var TestHandler = Controller.extend("com.ui5.testing.controller.ui5Testing", {
@@ -25,6 +27,11 @@ sap.ui.define([
                 assertFilter: [], //table entries of asserts,
                 messages: []
             },
+            codeSettings: {
+                language: "UI5"
+            },
+            quickSelect: false,
+            code: "",
             elements: [],
             elementLength: 0,
             elementDefault: {
@@ -59,16 +66,6 @@ sap.ui.define([
             dynamic: {
                 attrType: []
             },
-            codeLanguages: [
-                {
-                    key: "TCF",
-                    text: "Testcafe (Beta)"
-                },
-                {
-                    key: "OPA",
-                    text: "OPA5 (Alpha)"
-                }
-            ],
             statics: {
                 supportRules: [],
                 type: [
@@ -98,6 +95,7 @@ sap.ui.define([
                     { key: "PRT4", text: "Parent-Element (L4)" },
                     { key: "PLBL", text: "Label Element" },
                     { key: "MCMB", text: "Item-Data" },
+                    { key: "AGR", text: "Aggregation" },
                     { key: "PEL", text: "Previous Element" },
                     { key: "NEL", text: "Next Element" }
                 ],
@@ -126,7 +124,9 @@ sap.ui.define([
             this._getCriteriaTypes();
             this._initMessagePopover();
             this.getView().setModel(this._oModel, "viewModel");
+            this.getView().setModel(GlobalSettings.getModel(), "settingsModel");
             this.getRouter().getRoute("elementCreate").attachPatternMatched(this._onObjectMatched, this);
+            this.getRouter().getRoute("elementCreateQuick").attachPatternMatched(this._onObjectMatchedQuick, this);
             this.getRouter().getRoute("elementDisplay").attachPatternMatched(this._onObjectMatchedInReplay, this);
 
             this.getView().setModel(RecordController.getModel(), "recordModel");
@@ -138,6 +138,20 @@ sap.ui.define([
     TestHandler.prototype._onObjectMatched = function (oEvent) {
         this._sTestId = oEvent.getParameter("arguments").TestId;
         this._bReplayMode = false;
+        this._oModel.setProperty("/quickMode", false);
+        this._oModel.setProperty("/replayMode", false);
+        var oItem = Navigation.getSelectedItem();
+        if (!oItem || JSON.stringify(oItem) == "{}") {
+            this.getRouter().navTo("start");
+            return;
+        }
+        this.onClick(oItem);
+    };
+
+    TestHandler.prototype._onObjectMatchedQuick = function (oEvent) {
+        this._sTestId = oEvent.getParameter("arguments").TestId;
+        this._bReplayMode = false;
+        this._oModel.setProperty("/quickMode", true);
         this._oModel.setProperty("/replayMode", false);
         var oItem = Navigation.getSelectedItem();
         if (!oItem || JSON.stringify(oItem) == "{}") {
@@ -154,6 +168,7 @@ sap.ui.define([
         var aItems = this.getModel("navModel").getProperty("/elements");
         var oItem = aItems[this._sElementId];
         this._oModel.setProperty("/element", oItem);
+        this._oModel.setProperty("/quickMode", false);
         this._oModel.setProperty("/replayMode", true);
         this._updateSubActionTypes(false);
         this._adjustDomChildWith(this._oModel.getProperty("/element/item"));
@@ -293,6 +308,88 @@ sap.ui.define([
         this._oSelectDialog.addStyleClass("sapUiSizeCompact");
     };
 
+    TestHandler.prototype._getAssertDefinition = function (oElement) {
+        var sBasisCode = "";
+        var sCode = "";
+        var aAsserts = oElement.assertFilter;
+        var oAssertScope = {};
+        var sAssertType = oElement.property.assKey;
+        var sAssertMsg = oElement.property.assertMessage;
+        var aCode = [];
+        var sAssertCount = oElement.property.assKeyMatchingCount;
+        var aReturnCodeSimple = [];
+
+        if (sAssertType === 'ATTR') {
+            sBasisCode += ".getUI5(" + "({ element }) => element.";
+            for (var x = 0; x < aAsserts.length; x++) {
+                oAssertScope = {}; //reset per line..
+                var oAssert = aAsserts[x];
+
+                var oAssertLocalScope = this._attributeTypes[oAssert.attributeType].getAssertScope(oAssertScope);
+                var oAssertSpec = this._getValueSpec(oAssert, oElement.item);
+                if (oAssertSpec === null) {
+                    continue;
+                }
+
+                var sAssertFunc = "";
+                if (oAssert.operatorType == 'EQ') {
+                    sAssertFunc = 'eql'
+                } else if (oAssert.operatorType === 'NE') {
+                    sAssertFunc = 'notEql'
+                } else if (oAssert.operatorType === 'CP') {
+                    sAssertFunc = 'contains'
+                } else if (oAssert.operatorType === 'NP') {
+                    sAssertFunc = 'notContains'
+                }
+
+
+
+                var sAddCode = sBasisCode;
+                var sAssertCode = oAssertSpec.assert();
+                sAddCode += sAssertCode;
+
+                aReturnCodeSimple.push({
+                    assertType: oAssert.operatorType,
+                    assertLocation: sAssertCode,
+                    assertOperator: oAssert.operatorType,
+                    assertValue: oAssert.criteriaValue,
+                    assertField: oAssertSpec.assertField(),
+                    assertMsg: sAssertMsg
+                });
+
+                sAddCode += "))" + "." + sAssertFunc + "(" + "'" + oAssert.criteriaValue + "'";
+                if (sAssertMsg !== "") {
+                    sAddCode += "," + '"' + sAssertMsg + '"';
+                }
+                sAddCode += ")";
+                aCode.push(sAddCode);
+            }
+        } else if (sAssertType === "EXS") {
+            sCode = sBasisCode + ".exists).ok(";
+            if (sAssertMsg !== "") {
+                sCode += '"' + sAssertMsg + '"';
+            }
+            sCode += ")";
+            aCode.push(sCode);
+        } else if (sAssertType === "MTC") {
+            sCode = sBasisCode + ".count).eql(" + parseInt(sAssertCount, 10) + "";
+            if (sAssertMsg !== "") {
+                sCode += "," + '"' + sAssertMsg + '"';
+            }
+            sCode += ")";
+            aCode.push(sCode);
+        }
+
+        return {
+            code: aCode,
+            assertType: sAssertType,
+            assertMsg: sAssertMsg,
+            assertCode: aReturnCodeSimple,
+            assertMatchingCount: sAssertCount,
+            assertScope: oAssertLocalScope
+        }
+    };
+
     TestHandler.prototype._adjustBeforeSaving = function (oElement) {
         //what we are actually saving, is an extremly reduced form, of everything we need for code generation
         var oReturn = {
@@ -307,6 +404,7 @@ sap.ui.define([
             hash: "",
             stepExecuted: true
         };
+
         return new Promise(function (resolve, reject) {
             Communication.fireEvent("getwindowinfo").then(function (oData) {
                 if (!oData) {
@@ -329,6 +427,16 @@ sap.ui.define([
             }, true);
         }
         RecordController.startRecording();
+    };
+
+    TestHandler.prototype._onStopFromQuick = function () {
+        RecordController.stopRecording();
+        window.close();
+    };
+
+    TestHandler.prototype._onNewStepFromQuick = function () {
+        this.getRouter().navTo("testDetailsCreateQuick", {
+        }, true);
     };
 
     TestHandler.prototype._onSave = function () {
@@ -373,9 +481,16 @@ sap.ui.define([
                 resolve();
                 return false;
             }
-            Communication.fireEvent("execute", {
-                element: oElement
-            }).then(resolve);
+            this._getFoundElements().then(function (aElements) {
+                if (aElements.length === 0) {
+                    resolve();
+                    return;
+                }
+                oElement.item.identifier = aElements[0].identifier;
+                Communication.fireEvent("execute", {
+                    element: oElement
+                }).then(resolve);
+            });
         }.bind(this));
     };
 
@@ -475,18 +590,21 @@ sap.ui.define([
 
     TestHandler.prototype._updatePreview = function () {
         var oItem = this._oModel.getProperty("/element");
-        oItem = this._adjustBeforeSaving(oItem);
-
-        this._getFoundElements().then(function (aElements) {
-            this._oModel.setProperty("/element/identifiedElements", aElements);
-            if (aElements.length !== 1) {
-                //we are only expanding, in case we are in ACTION mode - reason: the user has to do sth. in case we are in action mode, as only one can be selected..
-                if (this._oModel.getProperty("/element/property/type") === 'ACT') {
-                    this.byId("atrElementsPnl").setExpanded(true);
+        oItem = this._adjustBeforeSaving(oItem).then(function (oElementFinal) {
+            this._getFoundElements().then(function (aElements) {
+                this._oModel.setProperty("/element/identifiedElements", aElements);
+                if (aElements.length !== 1) {
+                    //we are only expanding, in case we are in ACTION mode - reason: the user has to do sth. in case we are in action mode, as only one can be selected..
+                    if (this._oModel.getProperty("/element/property/type") === 'ACT') {
+                        this.byId("atrElementsPnl").setExpanded(true);
+                    }
                 }
-            }
-            this._checkElementNumber();
-            this._resumePerformanceBindings();
+                this._checkElementNumber();
+                this._resumePerformanceBindings();
+
+                var sLanguage = this._oModel.getProperty("/codeSettings/language");
+                this.getModel("viewModel").setProperty("/code", CodeHelper.getItemCode(sLanguage, oElementFinal).join("\n"));
+            }.bind(this));
         }.bind(this));
     };
 
@@ -572,144 +690,11 @@ sap.ui.define([
         }.bind(this));
     };
 
-    TestHandler.prototype._showItemControl = function (oControl) {
-        var oJQ = $(oControl.getDomRef());
-        var oJQDialog = $(this._oDialog.getDomRef());
-        var oOldWithControl = $(".HVRReveal");
-        oOldWithControl.removeClass("HVRReveal");
-        oJQ.addClass("HVRReveal");
-
-        oJQDialog.fadeOut(function () {
-            oJQDialog.delay(500).fadeIn(function () {
-                oJQ.removeClass("HVRReveal");
-                oOldWithControl.addClass("HVRReveal");
-            });
-        });
-    };
-
     TestHandler.prototype.onShowAssertionIssue = function (oEvent) {
         this._oMessagePopoverAssert.setBindingContext(oEvent.getSource().getBindingContext("viewModel"), "viewModel");
         this._oMessagePopoverAssert.toggle(oEvent.getSource());
     };
 
-    TestHandler.prototype._getAssertDefinition = function (oElement) {
-        var sBasisCode = "";
-        var sCode = "";
-        var aAsserts = oElement.assertFilter;
-        var oAssertScope = {};
-        var sAssertType = oElement.property.assKey;
-        var sAssertMsg = oElement.property.assertMessage;
-        var aCode = [];
-        var sAssertCount = oElement.property.assKeyMatchingCount;
-        var aReturnCodeSimple = [];
-
-        if (sAssertType === 'ATTR') {
-            sBasisCode += ".getUI5(" + "({ element }) => element.";
-            for (var x = 0; x < aAsserts.length; x++) {
-                oAssertScope = {}; //reset per line..
-                var oAssert = aAsserts[x];
-
-                var oAssertLocalScope = this._attributeTypes[oAssert.attributeType].getAssertScope(oAssertScope);
-                var oAssertSpec = this._getValueSpec(oAssert, oElement.item);
-                if (oAssertSpec === null) {
-                    continue;
-                }
-
-                var sAssertFunc = "";
-                if (oAssert.operatorType == 'EQ') {
-                    sAssertFunc = 'eql'
-                } else if (oAssert.operatorType === 'NE') {
-                    sAssertFunc = 'notEql'
-                } else if (oAssert.operatorType === 'CP') {
-                    sAssertFunc = 'contains'
-                } else if (oAssert.operatorType === 'NP') {
-                    sAssertFunc = 'notContains'
-                }
-
-
-
-                var sAddCode = sBasisCode;
-                var sAssertCode = oAssertSpec.assert();
-                sAddCode += sAssertCode;
-
-                aReturnCodeSimple.push({
-                    assertType: oAssert.operatorType,
-                    assertLocation: sAssertCode,
-                    assertValue: oAssert.criteriaValue
-                });
-
-                sAddCode += "))" + "." + sAssertFunc + "(" + "'" + oAssert.criteriaValue + "'";
-                if (sAssertMsg !== "") {
-                    sAddCode += "," + '"' + sAssertMsg + '"';
-                }
-                sAddCode += ")";
-                aCode.push(sAddCode);
-            }
-        } else if (sAssertType === "EXS") {
-            sCode = sBasisCode + ".exists).ok(";
-            if (sAssertMsg !== "") {
-                sCode += '"' + sAssertMsg + '"';
-            }
-            sCode += ")";
-            aCode.push(sCode);
-        } else if (sAssertType === "MTC") {
-            sCode = sBasisCode + ".count).eql(" + parseInt(sAssertCount, 10) + "";
-            if (sAssertMsg !== "") {
-                sCode += "," + '"' + sAssertMsg + '"';
-            }
-            sCode += ")";
-            aCode.push(sCode);
-        }
-
-        return {
-            code: aCode,
-            assertType: sAssertType,
-            assertMsg: sAssertMsg,
-            assertCode: aReturnCodeSimple,
-            assertMatchingCount: sAssertCount,
-            assertScope: oAssertLocalScope
-        }
-    };
-
-    TestHandler.prototype._getSelectorToJSONStringRec = function (oObject) {
-        var sStringCurrent = "";
-        var bFirst = true;
-        for (var s in oObject) {
-            var obj = oObject[s];
-            if (!bFirst) {
-                sStringCurrent += ", ";
-            }
-            bFirst = false;
-            if (Array.isArray(obj)) {
-                sStringCurrent += "[";
-                for (var i = 0; i < obj.length; i++) {
-                    if (i > 0) {
-                        sStringCurrent += ",";
-                    }
-                    sStringCurrent += this._getSelectorToJSONStringRec(obj[i]);
-                }
-                sStringCurrent += "]";
-            } else if (typeof obj === "object") {
-                sStringCurrent += s + ": { ";
-                sStringCurrent += this._getSelectorToJSONStringRec(obj);
-                sStringCurrent += " }";
-            } else {
-                if (this._oJSRegex.test(s) === false) {
-                    s = '"' + s + '"';
-                }
-                sStringCurrent += s;
-                sStringCurrent += " : ";
-                if (typeof obj === "boolean") {
-                    sStringCurrent += obj;
-                } else if (typeof obj === "number") {
-                    sStringCurrent += obj;
-                } else {
-                    sStringCurrent += '\"' + obj + '"';
-                }
-            }
-        }
-        return sStringCurrent;
-    };
 
     TestHandler.prototype.onChangeCriteriaValue = function (oEvent) {
         //reformat to have the correct data type..
@@ -740,11 +725,6 @@ sap.ui.define([
         this.onUpdatePreview();
     };
 
-    TestHandler.prototype._getSelectorToJSONString = function (oObject) {
-        this._oJSRegex = /^[_$a-zA-Z\xA0-\uFFFF][_$a-zA-Z0-9\xA0-\uFFFF]*$/; //this is not perfect - we are working with predefined names, which are not getting "any" syntax though
-        return "{ " + this._getSelectorToJSONStringRec(oObject) + " }";
-    };
-
     TestHandler.prototype.onRunSupportAssistant = function () {
         this._runSupportAssistantForSelElement();
     };
@@ -765,61 +745,81 @@ sap.ui.define([
                     this._oModel.setProperty("/element/supportAssistantResultLength", oStoreIssue.results.length);
                     this._updatePreview();
                 }.bind(this));
-    },
+    };
 
-        TestHandler.prototype._getSelectorDefinition = function (oElement) {
-            var oScope = {};
-            var sSelector = "";
-            var sSelectorAttributes = "";
-            var sSelectorAttributesStringified = null;
-            var sSelectorAttributesBtf = "";
-            var oItem = oElement.item;
-            var sActType = oElement.property.actKey; //PRS|TYP
-            var sSelectType = oElement.property.selectItemBy; //DOM | UI5 | ATTR
-            var sSelectorExtension = oElement.property.domChildWith;
+    TestHandler.prototype._convertValueSpecToUI5 = function (oSpec, oSelectorUI5, oAttribute, oItem) {
+        var oScopeLocal = this._attributeTypes[oAttribute.attributeType].getScope(oSelectorUI5);
+        if (oAttribute.attributeType === "OWN") {
+            oSelectorUI5.own = typeof oSelectorUI5.own !== "undefined" ? oSelectorUI5.own : {};
+            oScopeLocal = oSelectorUI5.own;
+        }
+        oSpec.getUi5Spec(oScopeLocal, oItem);
+    };
 
-            if (sSelectType === "DOM") {
-                sSelector = "Selector";
-                sSelectorAttributes = '#' + oElement.item.identifier.domId + sSelectorExtension;
-                sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
-            } else if (sSelectType === "UI5") {
-                sSelector = "UI5Selector";
-                sSelectorAttributes = oElement.item.identifier.ui5Id + sSelectorExtension;
-                sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
-            } else if (sSelectType === "ATTR") {
-                sSelector = "UI5Selector";
-                var aAttributes = oElement.attributeFilter;
-                if (sSelectorExtension) {
-                    $.extend(true, oScope, {
-                        domChildWith: sSelectorExtension
-                    });
+    TestHandler.prototype._getSelectorDefinition = function (oElement) {
+        var oScope = {};
+        var sSelector = "";
+        var sSelectorAttributes = "";
+        var sSelectorAttributesStringified = null;
+        var sSelectorAttributesBtf = "";
+        var oItem = oElement.item;
+        var sActType = oElement.property.actKey; //PRS|TYP
+        var sSelectType = oElement.property.selectItemBy; //DOM | UI5 | ATTR
+        var sSelectorExtension = oElement.property.domChildWith;
+        var oSelectorUI5 = {
+        };
+
+        if (sSelectType === "DOM") {
+            sSelector = "Selector";
+            sSelectorAttributes = '#' + oElement.item.identifier.domId + sSelectorExtension;
+            sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
+            oSelectorUI5.id = sSelectorAttributes;
+        } else if (sSelectType === "UI5") {
+            sSelector = "UI5Selector";
+            sSelectorAttributes = oElement.item.identifier.ui5Id + sSelectorExtension;
+            sSelectorAttributesStringified = '"' + sSelectorAttributes + '"';
+            oSelectorUI5 = {
+                own: {
+                    id: new RegExp(oElement.item.identifier.ui5Id).toString()
                 }
-
-                for (var i = 0; i < aAttributes.length; i++) {
-                    var oAttribute = aAttributes[i];
-                    //get the current item..
-                    var oItemLocal = this._attributeTypes[oAttribute.attributeType].getItem(oItem);
-                    var oSpec = this._getValueSpec(oAttribute, oItemLocal);
-                    if (oSpec === null) {
-                        continue;
-                    }
-                    //extent the current local scope with the code extensions..x
-                    var oScopeLocal = this._attributeTypes[oAttribute.attributeType].getScope(oScope);
-                    $.extend(true, oScopeLocal, oSpec.code(oAttribute.criteriaValue));
-                }
-
-                sSelectorAttributes = oScope;
-                sSelectorAttributesStringified = this._getSelectorToJSONString(oScope); //JSON.stringify(oScope);
-                sSelectorAttributesBtf = JSON.stringify(oScope, null, 2);
+            };
+        } else if (sSelectType === "ATTR") {
+            sSelector = "UI5Selector";
+            var aAttributes = oElement.attributeFilter;
+            if (sSelectorExtension) {
+                $.extend(true, oScope, {
+                    domChildWith: sSelectorExtension
+                });
             }
 
-            return {
-                selectorAttributes: sSelectorAttributes,
-                selectorAttributesStringified: sSelectorAttributesStringified ? sSelectorAttributesStringified : sSelectorAttributes,
-                selectorAttributesBtf: sSelectorAttributesBtf,
-                selector: sSelector
-            };
+            for (var i = 0; i < aAttributes.length; i++) {
+                var oAttribute = aAttributes[i];
+                var oItemLocal = this._attributeTypes[oAttribute.attributeType].getItem(oItem);
+                var oSpec = this._getValueSpec(oAttribute, oItemLocal);
+                if (oSpec === null) {
+                    continue;
+                }
+
+                this._convertValueSpecToUI5(oSpec, oSelectorUI5, oAttribute, oItemLocal);
+
+                //extent the current local scope with the code extensions..x
+                var oScopeLocal = this._attributeTypes[oAttribute.attributeType].getScope(oScope);
+                $.extend(true, oScopeLocal, oSpec.code(oAttribute.criteriaValue));
+            }
+
+            sSelectorAttributes = oScope;
+            sSelectorAttributesStringified = CodeHelper._getSelectorToJSONString(oScope); //JSON.stringify(oScope);
+            sSelectorAttributesBtf = JSON.stringify(oScope, null, 2);
+        }
+
+        return {
+            selectorAttributes: sSelectorAttributes,
+            selectorAttributesStringified: sSelectorAttributesStringified ? sSelectorAttributesStringified : sSelectorAttributes,
+            selectorAttributesBtf: sSelectorAttributesBtf,
+            selector: sSelector,
+            selectorUI5: oSelectorUI5
         };
+    };
     TestHandler.prototype._getValueSpec = function (oLine, oItem) {
         var aCriteriaSettings = this._criteriaTypes[oLine.criteriaType].criteriaSpec(oItem);
         for (var j = 0; j < aCriteriaSettings.length; j++) {
@@ -924,6 +924,12 @@ sap.ui.define([
     TestHandler.prototype._setItem = function (oItem) {
         this._suspendPerformanceBindings();
 
+        if (oItem.aggregationArray) {
+            oItem.aggregation = {};
+            for (var i = 0; i < oItem.aggregationArray.length; i++) {
+                oItem.aggregation[oItem.aggregationArray[i].name] = oItem.aggregationArray[i];
+            }
+        }
         this._oModel.setProperty("/element/item", oItem);
         this._oModel.setProperty("/element/attributeFilter", []);
         this._oModel.setProperty("/element/assertFilter", []);
@@ -1150,6 +1156,7 @@ sap.ui.define([
             }
             if (sPrefDomChildWith.length) {
                 this._oModel.setProperty("/element/property/domChildWith", sPrefDomChildWith);
+                return;
             }
         }
 
@@ -1681,432 +1688,14 @@ sap.ui.define([
 
 
     TestHandler.prototype._getCriteriaTypes = function () {
-        this._criteriaTypes = {
-            "ID": {
-                criteriaKey: "ID",
-                criteriaText: "Identifier",
-                criteriaSpec: function () {
-                    return [{
-                        subCriteriaType: "ID",
-                        subCriteriaText: "Global-Id",
-                        value: function (oItem) {
-                            return oItem.identifier.ui5Id;
-                        }.bind(this),
-                        code: function (sValue) {
-                            return { identifier: { ui5Id: sValue } }
-                        },
-                        assert: function (sValue) {
-                            return "identifier.ui5Id"
-                        }
-                    }, {
-                        subCriteriaType: "LID",
-                        subCriteriaText: "Local-Id",
-                        value: function (oItem) {
-                            return oItem.identifier.ui5LocalId;
-                        }.bind(this),
-                        code: function (sValue) {
-                            return { identifier: { ui5LocalId: sValue } }
-                        },
-                        assert: function (sValue) {
-                            return "identifier.ui5LocalId"
-                        }
-                    }];
-                }.bind(this)
-            },
-            "MTA": {
-                criteriaKey: "MTA",
-                criteriaText: "Metadata",
-                criteriaSpec: function () {
-                    return [{
-                        subCriteriaType: "ELM",
-                        subCriteriaText: "Element-Name",
-                        value: function (oItem) {
-                            return oItem.metadata.elementName;
-                        }.bind(this),
-                        code: function (sValue) {
-                            return { metadata: { elementName: sValue } }
-                        },
-                        assert: function () {
-                            return "metadata.elementName"
-                        }
-                    }, {
-                        subCriteriaType: "CMP",
-                        subCriteriaText: "Component-Name",
-                        value: function (oItem) {
-                            return oItem.metadata.componentName;
-                        }.bind(this),
-                        code: function (sValue) {
-                            return { metadata: { componentName: sValue } }
-                        },
-                        assert: function () {
-                            return "metadata.componentName"
-                        }
-                    }];
-                }.bind(this)
-            },
-            "VIW": {
-                criteriaKey: "VIW",
-                criteriaText: "View-Data",
-                criteriaSpec: function () {
-                    return [{
-                        subCriteriaType: "VIWNM",
-                        subCriteriaText: "View-Name",
-                        value: function (oItem) {
-                            return oItem.viewProperty.viewName;
-                        }.bind(this),
-                        code: function (sValue) {
-                            return { viewProperty: { viewName: sValue } }
-                        },
-                        assert: function () {
-                            return "viewProperty.viewName"
-                        }
-                    }, {
-                        subCriteriaType: "VIWLNM",
-                        subCriteriaText: "Local-View-Name",
-                        value: function (oItem) {
-                            return oItem.viewProperty.localViewName;
-                        }.bind(this),
-                        code: function (sValue) {
-                            return { viewProperty: { localViewName: sValue } }
-                        },
-                        assert: function () {
-                            return "viewProperty.localViewName"
-                        }
-                    }];
-                }.bind(this)
-            },
-            "AGG": {
-                criteriaKey: "AGG",
-                criteriaText: "Aggregation",
-                criteriaSpec: function (oItem) {
-                    var aReturn = [];
-                    for (var sAggregationName in oItem.aggregation) {
-                        var oAggregation = oItem.aggregation[sAggregationName];
-                        aReturn.push({
-                            subCriteriaType: oAggregation.name + "/" + "length",
-                            subCriteriaText: oAggregation.name + "/" + "length",
-                            code: function (sAggregation, sValue) {
-                                var oReturn = { aggregation: {} };
-                                oReturn.aggregation[sAggregation] = { length: sValue };
-                                return oReturn;
-                            }.bind(this, oAggregation.name),
-                            value: function (sAggregation, oItem) {
-                                return oItem.aggregation[sAggregation].length;
-                            }.bind(this, oAggregation.name),
-                            assert: function (sAggregation) {
-                                return "aggregation." + sAggregation + "." + "length";
-                            }.bind(this, oAggregation.name),
-                        });
-                    }
-                    return aReturn;
-                }.bind(this)
-            },
-            "BDG": {
-                criteriaKey: "BDG",
-                criteriaText: "Binding-Context",
-                criteriaSpec: function (oItem) {
-                    var aReturn = [];
-                    for (var sModel in oItem.context) {
-                        for (var sProperty in oItem.context[sModel]) {
-                            if (sProperty === "__metadata") {
-                                continue;
-                            }
-                            aReturn.push({
-                                subCriteriaType: sModel + "/" + sProperty,
-                                subCriteriaText: sModel + "/" + sProperty,
-                                code: function (sModel, sProperty, sValue) {
-                                    var oReturn = { context: {} };
-                                    oReturn.context[sModel] = {};
-                                    oReturn.context[sModel][sProperty] = sValue;
-                                    return oReturn;
-                                }.bind(this, sModel, sProperty),
-                                value: function (sModel, sProperty, oItem) {
-                                    return oItem.context[sModel][sProperty];
-                                }.bind(this, sModel, sProperty),
-                                assert: function (sModel, sProperty) {
-                                    return "context." + sModel + "." + sProperty;
-                                }.bind(this, sModel, sProperty),
-                            });
-                        }
-                    }
-                    return aReturn;
-                }.bind(this)
-            },
-            "MODL": {
-                criteriaKey: "MODL",
-                criteriaText: "Model-Keys (Specific)",
-                criteriaSpec: function (oItem) {
-                    var oMetadata = oItem.classArray;
-                    var aReturn = [];
-                    for (var i = 0; i < oMetadata.length; i++) {
-                        var sElementName = oMetadata[i].elementName;
-                        var oType = _oElementModelValues[sElementName];
-
-                        if (oType) {
-                            for (var sModel in oType) {
-
-                                if (!oItem.model[sModel === "undefined" ? undefined : sModel]) {
-                                    continue;
-                                }
-
-                                for (var sProperty in oType[sModel]) {
-                                    var sPropertyValue = oItem.model[sModel === "undefined" ? undefined : sModel][sProperty];
-                                    if (typeof sPropertyValue === "undefined") {
-                                        continue;
-                                    }
-
-                                    aReturn.push({
-                                        subCriteriaType: sModel + "/" + sProperty,
-                                        subCriteriaText: oType[sModel][sProperty],
-                                        code: function (sModel, sProperty, sValue) {
-                                            var oReturn = { model: {} };
-                                            oReturn.model[sModel] = {};
-                                            oReturn.model[sModel][sProperty] = sValue;
-                                            return oReturn;
-                                        }.bind(this, sModel, sProperty),
-                                        value: function (sModel, sProperty, oItem) {
-                                            if (!oItem.model[sModel]) {
-                                                return "";
-                                            }
-                                            return oItem.model[sModel][sProperty];
-                                        }.bind(this, sModel, sProperty),
-                                        assert: function (sModel, sProperty) {
-                                            return "model." + sModel + "." + sProperty;
-                                        }.bind(this, sModel, sProperty)
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    return aReturn;
-                }.bind(this)
-            },
-            "BNDG": {
-                criteriaKey: "BNDG",
-                criteriaText: "Binding Path",
-                criteriaSpec: function (oItem) {
-                    var aReturn = [];
-                    for (var sBinding in oItem.binding) {
-                        aReturn.push({
-                            subCriteriaType: sBinding,
-                            subCriteriaText: sBinding,
-                            code: function (sBinding, sValue) {
-                                var oReturn = { binding: {} };
-                                oReturn.binding[sBinding] = {
-                                    path: sValue
-                                };
-                                return oReturn;
-                            }.bind(this, sBinding),
-                            value: function (subCriteriaType, oItem) {
-                                return oItem.binding[subCriteriaType].path;
-                            }.bind(this, sBinding),
-                            assert: function (subCriteriaType) {
-                                return "binding." + subCriteriaType + ".path";
-                            }.bind(this, sBinding)
-                        });
-                    }
-                    return aReturn;
-                }
-            },
-            "ATTR": {
-                criteriaKey: "ATTR",
-                criteriaText: "Attributes",
-                criteriaSpec: function (oItem) {
-                    var aReturn = [];
-                    for (var sProperty in oItem.property) {
-                        aReturn.push({
-                            subCriteriaType: sProperty,
-                            subCriteriaText: sProperty,
-                            code: function (sProperty, sValue) {
-                                var oReturn = { property: {} };
-                                oReturn.property[sProperty] = sValue;
-                                return oReturn;
-                            }.bind(this, sProperty),
-                            value: function (subCriteriaType, oItem) {
-                                return oItem.property[subCriteriaType];
-                            }.bind(this, sProperty),
-                            assert: function (subCriteriaType) {
-                                return "property." + subCriteriaType;
-                            }.bind(this, sProperty)
-                        });
-                    }
-                    return aReturn;
-                }
-            }
-        };
-
-
-        this._attributeTypes = {
-            "OWN": {
-                getItem: function (oItem) { return oItem; },
-                getScope: function (oScope) { return oScope; },
-                getAssertScope: function () { return "" },
-                criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MTA"], this._criteriaTypes["MODL"], this._criteriaTypes["AGG"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
-            },
-            "VIW": {
-                getItem: function (oItem) { return oItem.view; }.bind(this),
-                getScope: function (oScope) { oScope.view = oScope.view ? oScope.view : {}; return oScope.view; },
-                getAssertScope: function () { return "view." },
-                criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MTA"], this._criteriaTypes["AGG"], this._criteriaTypes["BNDG"]]
-            },
-            "PRT": {
-                getItem: function (oItem) { return oItem.parent; }.bind(this),
-                getAssertScope: function () { return "parent." },
-                getScope: function (oScope) { oScope.parent = oScope.parent ? oScope.parent : {}; return oScope.parent; },
-                criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
-            },
-            "PRT2": {
-                getItem: function (oItem) { return oItem.parentL2; }.bind(this),
-                getAssertScope: function () { return "parentL2." },
-                getScope: function (oScope) { oScope.parentL2 = oScope.parentL2 ? oScope.parentL2 : {}; return oScope.parentL2; },
-                criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
-            },
-            "PRT3": {
-                getItem: function (oItem) { return oItem.parentL3; }.bind(this),
-                getAssertScope: function () { return "parentL3." },
-                getScope: function (oScope) { oScope.parentL3 = oScope.parentL3 ? oScope.parentL3 : {}; return oScope.parentL3; },
-                criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
-            },
-            "PRT4": {
-                getItem: function (oItem) { return oItem.parentL4; }.bind(this),
-                getAssertScope: function () { return "parentL4." },
-                getScope: function (oScope) { oScope.parentL4 = oScope.parentL4 ? oScope.parentL4 : {}; return oScope.parentL4; },
-                criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
-            },
-            "PLBL": {
-                getItem: function (oItem) { return oItem.label; }.bind(this),
-                getAssertScope: function () { return "label." },
-                getScope: function (oScope) { oScope.label = oScope.label ? oScope.label : {}; return oScope.label; },
-                criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MODL"], this._criteriaTypes["MTA"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
-            },
-            "MCMB": {
-                getItem: function (oItem) {
-                    return oItem.itemdata;
-                }.bind(this),
-                getScope: function (oScope) { oScope.itemdata = oScope.itemdata ? oScope.itemdata : {}; return oScope.itemdata; },
-                getAssertScope: function () { return "itemdata." },
-                criteriaTypes: [this._criteriaTypes["ID"], this._criteriaTypes["ATTR"], this._criteriaTypes["BDG"], this._criteriaTypes["MTA"], this._criteriaTypes["AGG"], this._criteriaTypes["BNDG"], this._criteriaTypes["VIW"]]
-            },
-        };
+        this._criteriaTypes = GlobalSettings.getCriteriaTypes();
+        this._attributeTypes = GlobalSettings.getAttributeTypes();
 
         this._defineElementBasedActions();
     };
 
     TestHandler.prototype._defineElementBasedActions = function () {
-        this._oElementMix = {
-            "sap.m.StandardListItem": {
-                defaultAttributes: function (oItem) {
-                    if (!oItem.itemdata.identifier.ui5Id.length) {
-                        return [];
-                    }
-                    return [{ attributeType: "MCMB", criteriaType: "ATTR", subCriteriaType: "key" }];
-                }
-            },
-            "sap.ui.core.Element": {
-                defaultAction: "PRS",
-                actions: {
-                    "PRS": [{ text: "Root", domChildWith: "", order: 99 }],
-                    "TYP": [{ text: "Root", domChildWith: "", order: 99 }]
-                }
-            },
-            "sap.ui.core.Icon": {
-                preferredProperties: ["src"],
-                defaultAttributes: function (oItem) {
-                    return [{ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "src" }];
-                }
-            },
-            "sap.m.ObjectListItem": {
-                cloned: true,
-                preferredProperties: ["title"]
-            },
-            "sap.m.Button": {
-                defaultAction: "PRS",
-                preferredProperties: ["text", "icon"],
-                defaultAttributes: function (oItem) {
-                    var aReturn = [];
-                    if (oItem.binding.text) {
-                        aReturn.push({ attributeType: "OWN", criteriaType: "BNDG", subCriteriaType: "text" });
-                    }
-                    if (oItem.binding.icon) {
-                        aReturn.push({ attributeType: "OWN", criteriaType: "BNDG", subCriteriaType: "icon" });
-                    } else if (oItem.property.icon) {
-                        aReturn.push({ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "icon" });
-                    }
-                    if (oItem.binding.tooltip) {
-                        aReturn.push({ attributeType: "OWN", criteriaType: "BNDG", subCriteriaType: "tooltip" });
-                    }
-                    return aReturn;
-                }
-            },
-            "sap.m.ListItemBase": {
-                cloned: true,
-                askForBindingContext: true
-            },
-            "sap.ui.core.Item": {
-                cloned: true,
-                defaultAttributes: function (oItem) {
-                    return [{ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "key" }];
-                }
-            },
-            "sap.m.Link": {
-                defaultAttributes: function (oItem) {
-                    //if the text is static --> take the binding with priority..
-                    if (oItem.binding && oItem.binding["text"] && oItem.binding["text"].static === true) {
-                        return [{ attributeType: "OWN", criteriaType: "BNDG", subCriteriaType: "text" }];
-                    } else if (oItem.property.text && oItem.property.text.length > 0) {
-                        return [{ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "text" }];
-                    } else if (oItem.property.text && oItem.property.text.length > 0) {
-                        return [{ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "target" }];
-                    } else if (oItem.property.text && oItem.property.text.length > 0) {
-                        return [{ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "href" }];
-                    }
-                }
-            },
-            "sap.m.ComboBoxBase": {
-                defaultAction: "PRS",
-                actions: {
-                    "PRS": [{ text: "Arrow (Open List)", domChildWith: "-arrow", preferred: true, order: 1 }]
-                }
-            },
-            "sap.m.GenericTile": {
-                defaultAction: "PRS",
-                defaultAttributes: [{ attributeType: "OWN", criteriaType: "MODL", subCriteriaType: "undefined//config/navigation_semantic_action" },
-                { attributeType: "OWN", criteriaType: "MODL", subCriteriaType: "undefined//config/navigation_semantic_object" }]
-            },
-            "sap.m.MultiComboBox": {
-                defaultAction: "PRS",
-                actions: {
-                    "PRS": [{ text: "Arrow (Open List)", domChildWith: "-arrow", preferred: true, order: 1 }]
-                }
-            },
-            "sap.m.Text": {
-                preferredProperties: ["text"]
-            },
-            "sap.m.Select": {
-                defaultAction: "PRS",
-                actions: {
-                    "PRS": [{ text: "Arrow (Open List)", domChildWith: "-arrow", preferred: true, order: 1 }]
-                }
-            },
-            "sap.m.InputBase": {
-                defaultAction: "TYP",
-                actions: {
-                    "TYP": [{ text: "In Input-Field", domChildWith: "-inner", preferred: true, order: 1 }]
-                }
-            },
-            "sap.ui.table.Row": {
-                cloned: true,
-                defaultAction: "PRS",
-                actions: {
-                    "PRS": [{ text: "On Selection-Area", domChildWith: "-col0", preferred: true, order: 1 }]
-                }
-            },
-            "sap.m.SearchField": {
-                defaultAction: [{ domChildWith: "-search", action: "PRS" },
-                { domChildWith: "-reset", action: "PRS" },
-                { domChildWith: "", action: "TYP" }]
-            }
-        };
+        this._oElementMix = GlobalSettings.getElementMix();
     };
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////
