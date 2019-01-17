@@ -41,13 +41,11 @@
                                 <Label text="Replay" tooltip="Replay.."/>
                                 <Button icon="sap-icon://play" press="onReplayAll"/>
                             </f:content>
-
-
                         </f:SimpleForm>
 
                         <Panel expandable="true" expanded="true" width="auto">
                             <headerToolbar>
-                                <Toolbar height="3rem" style="Clear">
+                                <Toolbar press="onExpandControl" height="3rem" active="true" style="Clear">
                                     <Title titleStyle="H5" text="Steps ( {= ${navModel>/elementLength} } )" />
                                 </Toolbar>
                             </headerToolbar>

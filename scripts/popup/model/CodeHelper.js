@@ -123,7 +123,7 @@ sap.ui.define([
             }
             bIsRegex = false;
             bFirst = false;
-            if ( obj && obj.__isRegex && obj.__isRegex === true ) {
+            if (obj && obj.__isRegex && obj.__isRegex === true) {
                 obj = obj.id;
                 bIsRegex = true;
             }
@@ -134,7 +134,7 @@ sap.ui.define([
                         sStringCurrent += ",";
                     }
                     if (typeof obj[i] === "object") {
-                        sStringCurrent +=  "{ ";
+                        sStringCurrent += "{ ";
                         sStringCurrent += this._getSelectorToJSONStringRec(obj[i]);
                         sStringCurrent += " }";
                     } else {
@@ -169,11 +169,83 @@ sap.ui.define([
         return "{ " + this._getSelectorToJSONStringRec(oObject) + " }";
     };
 
+    CodeHelper.prototype._getUI5Element = function (oElement, oUI5Selector, oAssert) {
+        var sElement = "element";
+        var bMulti = false;
+        if (oElement.property.type === 'ASS' && (oElement.assertion.assertType === "MTC" || oElement.assertion.assertType === "EXS")) {
+            bMulti = true;
+        }
+
+        if (oAssert) {
+            oElement.property.selectItemBy = "ATTR"; //ids are already ok - no need to adjust..
+            oUI5Selector.own = oUI5Selector.own ? oUI5Selector.own : {};
+            oUI5Selector.own = $.extend({}, oUI5Selector.own, oAssert.assertUI5Spec);
+        }
+
+        if (oElement.property.selectItemBy === "DOM") {
+            sElement += "(by.jq('" + oUI5Selector.id + "'))";
+        } else if (oElement.property.selectItemBy === "UI5") {
+            if (bMulti === true) {
+                sElement += ".all(by.";
+            } else {
+                sElement += "(by.";
+            }
+
+            sElement += "control({ id: " + oUI5Selector.own.id;
+            if (oUI5Selector.own.interaction) {
+                if (oUI5Selector.own.interaction.idSuffix) {
+                    sElement += "," + "interaction: { idSuffix : \"" + oUI5Selector.own.interaction.idSuffix + "\" }";
+                } else {
+                    sElement += "," + "interaction: \"" + oUI5Selector.own.interaction + "\"";
+                }
+            }
+            sElement += "}))";
+        } else if (oElement.property.selectItemBy === "ATTR") {
+            //go ahead by parentL4, L3, L2, L1 - for "cleaner" code, we will create seperate lines for every single one..
+            var sParents = "";
+            if (oUI5Selector.parent) {
+                sParents = sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parent) + "))";
+            }
+            if (oUI5Selector.parentL2) {
+                sParents += "." + sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parentL4) + "))";
+            }
+            if (oUI5Selector.parentL3) {
+                sParents += "." + sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parentL3) + "))";
+            }
+            if (oUI5Selector.parentL4) {
+                sParents += "." + sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parentL4) + "))";
+            }
+
+            //syntax: element().element().element().all(target_element)
+            var sOwnElement = "control( " + this._getSelectorToJSONString(oUI5Selector.own) + "))";
+            if (sParents.length && bMulti == true) {
+                sElement = sParents + ".all(" + sOwnElement + ")";
+            } else if (bMulti === true) {
+                sElement = sElement + ".all(by." + sOwnElement;
+            } else {
+                sElement = sElement + "(by." + sOwnElement;
+            }
+        }
+
+        return sElement;
+    }
+
     CodeHelper.prototype._getUI5CodeFromItem = function (oElement) {
         var sCode = "";
         var aCode = [];
 
+        //ui5-specific (1): for ui5, we must have a CONSISTENT parent handling (parentl4 is not possible without l3,l2 and l1) - we will simply add the controlType for those missing..
         var oSelector = oElement.selector;
+        if (oSelector.selectorUI5.parentL4 && !oSelector.selectorUI5.parentL3) {
+            oSelector.selectorUI5.parentL3 = { controlType: oElement.item.parentL3.metadata.elementName };
+        }
+        if (oSelector.selectorUI5.parentL3 && !oSelector.selectorUI5.parentL2) {
+            oSelector.selectorUI5.parentL2 = { controlType: oElement.item.parentL2.metadata.elementName };
+        }
+        if (oSelector.selectorUI5.parentL2 && !oSelector.selectorUI5.parent) {
+            oSelector.selectorUI5.parent = { controlType: oElement.item.parent.metadata.elementName };
+        }
+
         var sType = oElement.property.type; // SEL | ACT | ASS
         var sActType = oElement.property.actKey; //PRS|TYP
         var oUI5Selector = oSelector.selectorUI5;
@@ -181,12 +253,6 @@ sap.ui.define([
         //(1) first: build up the actual selector
         var sSelectorAttributes = "";
         var sSelectorFinal = sSelectorAttributes;
-
-        //in all cases, we will need an ELEMENT...
-        var sElementAdjustment = "";
-        if (sType === 'ASS' && (oElement.assertion.assertType === "MTC" || oElement.assertion.assertType === "EXS" ) ) {
-            sElementAdjustment = ".all"
-        }
 
         var sDomChildWith = "";
         if (oElement.property.domChildWith.startsWith("-")) {
@@ -197,7 +263,7 @@ sap.ui.define([
 
         var bAddSuffix = false;
         var oInteraction = null;
-        if (sType === "ACT" && sDomChildWith.length > 0 ) {
+        if (sType === "ACT" && sDomChildWith.length > 0) {
             oUI5Selector.own = typeof oUI5Selector.own !== "undefined" ? oUI5Selector.own : {};
             oInteraction = {
                 interaction: {
@@ -206,56 +272,13 @@ sap.ui.define([
             }
             oUI5Selector.own.interaction = oInteraction.interaction;
             bAddSuffix = true;
-        } else if ( sType === "ASS" ) {
-            //generally interact against the root, in oder to avoid assertion-on non rendered controls
-            oUI5Selector.own = typeof oUI5Selector.own !== "undefined" ? oUI5Selector.own : {};
-            oUI5Selector.own.interaction = "root";
-            oInteraction = {
-                interaction : "root"
-            };
-            bAddSuffix = true;
+        } else {
+            if (oElement.defaultInteraction) {
+                oUI5Selector.own.interaction = "root";
+            }
         }
 
-        var sElement = "element" + sElementAdjustment + "(by.";
-        if (oElement.property.selectItemBy === "DOM") {
-            sElement += "jq('" + oUI5Selector.id + "'))";
-        } else if (oElement.property.selectItemBy === "UI5") {
-            sElement += "control({ id: " + oUI5Selector.own.id;
-            if (bAddSuffix === true) {
-                sElement += "," + "interaction: " + this._getSelectorToJSONString(oInteraction.interaction) + "";
-            }
-            sElement += "}))";
-        } else if (oElement.property.selectItemBy === "ATTR") {
-            //go ahead by parentL4, L3, L2, L1, [..]
-            var aElements = [];
-            if (oUI5Selector.parentL4) {
-                aElements.push(
-                    sElement + "control( " + this._getSelectorToJSONString(oUI5Selector.parentL4) + "))"
-                )
-            }
-            if (oUI5Selector.parentL3) {
-                aElements.push(
-                    sElement + "control( " + this._getSelectorToJSONString(oUI5Selector.parentL3) + "))"
-                )
-            }
-            if (oUI5Selector.parentL2) {
-                aElements.push(
-                    sElement + "control( " + this._getSelectorToJSONString(oUI5Selector.parentL2) + "))"
-                )
-            }
-            if (oUI5Selector.parent) {
-                aElements.push(
-                    sElement + "control( " + this._getSelectorToJSONString(oUI5Selector.parent) + "))"
-                )
-            }
-            if (oUI5Selector.own) {
-                aElements.push(
-                    sElement + "control( " + this._getSelectorToJSONString(oUI5Selector.own) + "))"
-                )
-            }
-            sElement = aElements.join(".");
-        }
-
+        var sElement = this._getUI5Element(oElement, oUI5Selector);
         var sAction = "";
         if (sType === 'ACT') {
             sCode = sElement + ".";
@@ -288,20 +311,30 @@ sap.ui.define([
                 sCode = sCode + ");";
                 aCode.push(sCode);
             }
-        } else if (sType === 'ASS') {
+        }
+
+        if (sType === 'ASS') {
             if (oElement.assertion.assertType === "ATTR") {
                 for (var i = 0; i < oElement.assertion.assertCode.length; i++) {
+                    //everything which is NOT a property, must be moved..
                     var oAss = oElement.assertion.assertCode[i];
-                    sCode = "expect(" + sElement + ".asControl().getProperty(\"" + oAss.assertField.value + "\")).toBe(";
 
-                    if (typeof oAss.assertValue === "boolean") {
-                        sCode += oAss.assertValue;
-                    } else if (typeof oAss.assertValue === "number") {
-                        sCode += oAss.assertValue;
+                    if (oAss.assertField.type == "property") {
+                        sCode = "expect(" + sElement + ".asControl().getProperty(\"" + oAss.assertField.value + "\")).toBe(";
+
+                        if (typeof oAss.assertValue === "boolean") {
+                            sCode += oAss.assertValue;
+                        } else if (typeof oAss.assertValue === "number") {
+                            sCode += oAss.assertValue;
+                        } else {
+                            sCode += '"' + oAss.assertValue + '"';
+                        }
+                        sCode += ");"
                     } else {
-                        sCode += '"' + oAss.assertValue + '"';
+                        //we are actually searching for "exists" now. we will hand over the attributes we are searching for into the searching handler..
+                        var sElementTmp = this._getUI5Element(oElement, oUI5Selector, oAss);
+                        sCode = "expect(" + sElementTmp + ".count()).toBeGreaterThan(0);";
                     }
-                    sCode += ");"
 
                     aCode.push(sCode);
                 }
@@ -533,22 +566,32 @@ sap.ui.define([
         return aCode;
     };
 
+    CodeHelper.prototype._getFirstComponent = function (aElements) {
+        var sFirstPage = "";
+        var sFirstComponent = "";
+        for (var i = 0; i < aElements.length; i++) {
+            if (aElements[i].item.metadata.componentId && sFirstComponent.length === 0) {
+                sFirstComponent = aElements[i].item.metadata.componentId;
+                sFirstPage = aElements[i].item.viewProperty.localViewName;
+                break;
+            }
+        }
+
+        return {
+            page: sFirstPage,
+            component: sFirstComponent
+        }
+    };
+
+
     CodeHelper.prototype._groupCodeByCluster = function (aElements) {
         var aCluster = [[]];
         var bNextIsBreak = false;
-        var sFirstComponent = "";
-        var sFirstPage = "";
-        var oFirstComponent = null;
         var aPages = {};
         for (var i = 0; i < aElements.length; i++) {
             if (bNextIsBreak === true) {
                 aCluster.push([]);
                 bNextIsBreak = false;
-            }
-            if (aElements[i].item.metadata.componentId && sFirstComponent.length === 0) {
-                oFirstComponent = aElements[i].item.metadata;
-                sFirstComponent = aElements[i].item.metadata.componentId;
-                sFirstPage = aElements[i].item.viewProperty.localViewName;
             }
             if (typeof aPages[aElements[i].item.viewProperty.localViewName] === "undefined") {
                 aPages[aElements[i].item.viewProperty.localViewName] = {
@@ -593,7 +636,9 @@ sap.ui.define([
 
         //group elements by assertions (Given, When, Then)
         var aCluster = this._groupCodeByCluster(aElements);
-
+        var oPage = this._getFirstComponent(aElements);
+        var sFirstComponent = oPage.component;
+        var sFirstPage = oPage.page;
 
         sCode += '    opaTest("Initialize the Application", function (Given, When, Then) {\n';
         sCode += '        Given.onThe' + sFirstPage + 'Page.iInitializeMockServer().iStartMockServer().\n        iStartTheApp("' + sFirstComponent + '", { hash: "' + aElements[0].hash + '" });\n\n';
@@ -625,8 +670,8 @@ sap.ui.define([
         aCodes.push(oCodeTest);
 
         //create a code per view..
-        for (var sPage in aPages) {
-            var oPage = aPages[sPage];
+        for (var sPage in aCluster) {
+            var oPage = aCluster[sPage];
             sCode = "sap.ui.define([\n";
             sCode += '  "sap/ui/test/Opa5",\n';
             sCode += '  "com/ui5/testing/PageBase"\n';

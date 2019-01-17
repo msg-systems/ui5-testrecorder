@@ -261,7 +261,6 @@ sap.ui.define([
     }
 
     TestDetails.prototype._onItemSelected = function (oData) {
-        console.log("CALLED");
         if (this._bReplayMode === true) {
             return; //NO!
         }
@@ -269,7 +268,7 @@ sap.ui.define([
         Navigation.setSelectedItem(oData);
         RecordController.focusPopup();
 
-        if ( this._bQuickMode !== true ) {
+        if (this._bQuickMode !== true) {
             this.getRouter().navTo("elementCreate", {
                 TestId: this.getModel("navModel").getProperty("/test/uuid"),
                 ElementId: oData.identifier.ui5AbsoluteId
@@ -411,6 +410,11 @@ sap.ui.define([
             TestId: this.getModel("navModel").getProperty("/test/uuid"),
             ElementId: this._iCurrentStep
         });
+    };
+
+    TestDetails.prototype.onExpandControl = function (oEvent) {
+        var oPanel = oEvent.getSource().getParent();
+        oPanel.setExpanded(oPanel.getExpanded() === false);
     };
 
     TestDetails.prototype.onUpdatePreview = function () {
