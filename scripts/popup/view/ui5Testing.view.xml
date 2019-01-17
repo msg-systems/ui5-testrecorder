@@ -218,7 +218,6 @@
                 </content>
             </Panel>
 
-
             <Panel visible="{= ( ${viewModel>/element/property/type} === 'ASS' ) &amp;&amp; ( ${viewModel>/element/property/assKey} === 'ATTR' ) }" expandable="true" expanded="true" width="auto">
                 <headerToolbar>
                     <Toolbar height="3em" style="Clear">
@@ -321,6 +320,7 @@
                     </Table>
                 </content>
             </Panel>
+			
             <Panel expandable="true" expanded="true" width="auto">
                 <headerToolbar>
                     <Toolbar height="3rem" style="Clear">
@@ -342,6 +342,7 @@
                 </content>
             </Panel>
         </semantic:content>
+		
         <semantic:customFooterContent>
             <Button visible="{= ${viewModel>/quickMode} === true }" type="Reject" text="Cancel" press="_onStopFromQuick"/>
             <Button visible="{= ${viewModel>/quickMode} === true }" type="Accept" text="Re-Select" press="_onNewStepFromQuick"/>

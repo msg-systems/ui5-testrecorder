@@ -365,7 +365,7 @@ sap.ui.define([
                 criteriaSpec: function (oItem) {
                     var aReturn = [];
                     for (var sBinding in oItem.binding) {
-                        debugger;
+                        //debugger;
                         aReturn.push({
                             subCriteriaType: sBinding,
                             subCriteriaText: sBinding,
@@ -378,7 +378,7 @@ sap.ui.define([
                             }.bind(this, sBinding),
                             getUi5Spec: function (oAdjust, oItem) {
                                 //restriction: maximum one binding path apperently?
-                                debugger;
+                                //debugger;
                                 oAdjust.bindingPath = typeof oAdjust.bindingPath != "undefined" ? oAdjust.bindingPath : {};
                                 oAdjust.bindingPath = {
                                     propertyPath: this.subCriteriaType,
