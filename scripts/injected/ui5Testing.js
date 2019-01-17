@@ -240,7 +240,7 @@ else {
     };
 
     TestHandler.prototype._getControlFromDom = function (oDomNode) {
-        var oControls = $(oDomNode).control();
+        var oControls = jQuery(document.getElementById(oDomNode.id)).control();
         if (!oControls || !oControls.length) {
             return null;
         }
