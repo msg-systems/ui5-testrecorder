@@ -38,33 +38,6 @@ sap.ui.define([
                 action: [
                     { key: "PRS", text: "Press" },
                     { key: "TYP", text: "Type Text" }
-                ],
-                assertType: [
-                    { key: "ATTR", text: "Attributes" },
-                    { key: "EXS", text: "Exists" },
-                    { key: "MTC", text: "Matching Count" },
-                ],
-                selType: [
-                    { key: "UI5", text: "UI5-Identifier" },
-                    { key: "ATTR", text: "Combination of Attributes" }
-                ],
-                attrType: [
-                    { key: "OWN", text: "Own Element" },
-                    { key: "VIW", text: "View" },
-                    { key: "PRT", text: "Parent-Element (L1)" },
-                    { key: "PRT2", text: "Parent-Element (L2)" },
-                    { key: "PRT3", text: "Parent-Element (L3)" },
-                    { key: "PRT4", text: "Parent-Element (L4)" },
-                    { key: "PLBL", text: "Label Element" },
-                    { key: "MCMB", text: "Item-Data" },
-                    { key: "PEL", text: "Previous Element" },
-                    { key: "NEL", text: "Next Element" }
-                ],
-                operator: [
-                    { key: "EQ", text: "Equal" },
-                    { key: "NE", text: "Not Equal" },
-                    { key: "CP", text: "Contains" },
-                    { key: "NP", text: "Not Contains" }
                 ]
             }
         }),
