@@ -607,6 +607,7 @@ sap.ui.define([
     }
 
     CodeHelper.prototype._opaGetCode = function (aElements) {
+		//TODO: @Adrian this is yours :P
         var aCodes = [];
         var bSupportAssistant = this._oModel.getProperty("/codeSettings/supportAssistant");
 
