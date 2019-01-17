@@ -81,9 +81,10 @@ sap.ui.define([
                         code: function (sValue) {
                             return { identifier: { ui5Id: sValue } }
                         },
-                        getUi5Spec: function (oAdjust, oItem) {
+                        getUi5Spec: function (oAdjust, oItem, iValue) {
+                            iValue = typeof iValue === "undefined" ? this.value(oItem) : iValue;
                             oAdjust.id = {
-                                id: new RegExp(this.value(oItem)).toString(),
+                                id: new RegExp(iValue + "$").toString(),
                                 __isRegex: true
                             }
                         },
@@ -99,9 +100,10 @@ sap.ui.define([
                         code: function (sValue) {
                             return { identifier: { ui5LocalId: sValue } }
                         },
-                        getUi5Spec: function (oAdjust, oItem) {
+                        getUi5Spec: function (oAdjust, oItem, iValue) {
+                            iValue = typeof iValue === "undefined" ? this.value(oItem) : iValue;
                             oAdjust.id = {
-                                id: new RegExp(this.value(oItem)).toString(),
+                                id: new RegExp(iValue + "$").toString(),
                                 __isRegex: true
                             }
                         },
@@ -110,7 +112,6 @@ sap.ui.define([
                         },
                         assertField: function (sValue) {
                             return {
-                                fn: true,
                                 type: "id"
                             }
                         }
@@ -130,15 +131,16 @@ sap.ui.define([
                         code: function (sValue) {
                             return { metadata: { elementName: sValue } }
                         },
-                        getUi5Spec: function (oAdjust, oItem) {
-                            oAdjust.controlType = this.value(oItem);
+
+                        getUi5Spec: function (oAdjust, oItem, iValue) {
+                            iValue = typeof iValue === "undefined" ? this.value(oItem) : iValue;
+                            oAdjust.controlType = iValue;
                         },
                         assert: function () {
                             return "metadata.elementName"
                         },
                         assertField: function (sValue) {
                             return {
-                                fn: true,
                                 type: "elementName"
                             }
                         }
@@ -151,7 +153,7 @@ sap.ui.define([
                         code: function (sValue) {
                             return { metadata: { componentName: sValue } }
                         },
-                        getUi5Spec: function (oAdjust, oItem) {
+                        getUi5Spec: function (oAdjust, oItem, iValue) {
                             //not possible..
                         },
                         assert: function () {
@@ -159,7 +161,6 @@ sap.ui.define([
                         },
                         assertField: function (sValue) {
                             return {
-                                fn: true,
                                 type: "componentName"
                             }
                         }
@@ -179,15 +180,14 @@ sap.ui.define([
                         code: function (sValue) {
                             return { viewProperty: { viewName: sValue } }
                         },
-                        getUi5Spec: function (oAdjust, oItem) {
-                            oAdjust.viewName = this.value(oItem);
+                        getUi5Spec: function (oAdjust, oItem, iValue) {
+                            oAdjust.viewName = iValue;
                         },
                         assert: function () {
                             return "viewProperty.viewName"
                         },
                         assertField: function (sValue) {
                             return {
-                                fn: true,
                                 type: "viewName"
                             }
                         }
@@ -200,15 +200,15 @@ sap.ui.define([
                         code: function (sValue) {
                             return { viewProperty: { localViewName: sValue } }
                         },
-                        getUi5Spec: function (oAdjust, oItem) {
-                            oAdjust.viewName = new RegExp(this.value(oItem)).toString();
+                        getUi5Spec: function (oAdjust, oItem, iValue) {
+                            iValue = typeof iValue === "undefined" ? this.value(oItem) : iValue;
+                            oAdjust.viewName = new RegExp(iValue + "$").toString();
                         },
                         assert: function () {
                             return "viewProperty.localViewName"
                         },
                         assertField: function (sValue) {
                             return {
-                                fn: true,
                                 type: "localViewName"
                             }
                         }
@@ -234,8 +234,9 @@ sap.ui.define([
                             value: function (sAggregation, oItem) {
                                 return oItem.aggregation[sAggregation].length;
                             }.bind(this, oAggregation.name),
-                            getUi5Spec: function (oAdjust, oItem) {
-                                var iValue = this.value(oItem);
+
+                            getUi5Spec: function (oAdjust, oItem, iValue) {
+                                iValue = typeof iValue === "undefined" ? this.value(oItem) : iValue;
                                 if (iValue === 0) {
                                     oAdjust.aggregationEmpty = {
                                         name: this.aggregationName
@@ -252,7 +253,6 @@ sap.ui.define([
                             }.bind(this, oAggregation.name),
                             assertField: function (sValue) {
                                 return {
-                                    fn: true,
                                     type: "aggregation"
                                 }
                             }
@@ -283,7 +283,7 @@ sap.ui.define([
                                 value: function (sModel, sProperty, oItem) {
                                     return oItem.context[sModel][sProperty];
                                 }.bind(this, sModel, sProperty),
-                                getUi5Spec: function (oAdjust, oItem) {
+                                getUi5Spec: function (oAdjust, oItem, iValue) {
                                     return ""; //not really possible right?
                                 },
                                 assert: function (sModel, sProperty) {
@@ -291,7 +291,6 @@ sap.ui.define([
                                 }.bind(this, sModel, sProperty),
                                 assertField: function (sValue) {
                                     return {
-                                        fn: true,
                                         type: "context"
                                     }
                                 }
@@ -339,7 +338,7 @@ sap.ui.define([
                                             }
                                             return oItem.model[sModel][sProperty];
                                         }.bind(this, sModel, sProperty),
-                                        getUi5Spec: function (oAdjust, oItem) {
+                                        getUi5Spec: function (oAdjust, oItem, iValue) {
                                             return ""; //not really possible
                                         },
                                         assert: function (sModel, sProperty) {
@@ -347,7 +346,6 @@ sap.ui.define([
                                         }.bind(this, sModel, sProperty),
                                         assertField: function (sValue) {
                                             return {
-                                                fn: true,
                                                 type: "prop"
                                             }
                                         }
@@ -365,7 +363,6 @@ sap.ui.define([
                 criteriaSpec: function (oItem) {
                     var aReturn = [];
                     for (var sBinding in oItem.binding) {
-                        debugger;
                         aReturn.push({
                             subCriteriaType: sBinding,
                             subCriteriaText: sBinding,
@@ -376,13 +373,14 @@ sap.ui.define([
                                 };
                                 return oReturn;
                             }.bind(this, sBinding),
-                            getUi5Spec: function (oAdjust, oItem) {
+                            getUi5Spec: function (oAdjust, oItem, iValue) {
                                 //restriction: maximum one binding path apperently?
-                                debugger;
+                                iValue = typeof iValue === "undefined" ? this.value(oItem) : iValue;
+
                                 oAdjust.bindingPath = typeof oAdjust.bindingPath != "undefined" ? oAdjust.bindingPath : {};
                                 oAdjust.bindingPath = {
                                     propertyPath: this.subCriteriaType,
-                                    path: this.value(oItem)
+                                    path: iValue
                                 };
                             },
                             value: function (subCriteriaType, oItem) {
@@ -393,7 +391,6 @@ sap.ui.define([
                             }.bind(this, sBinding),
                             assertField: function (sValue) {
                                 return {
-                                    fn: true,
                                     type: "binding"
                                 }
                             }
@@ -419,10 +416,13 @@ sap.ui.define([
                             value: function (subCriteriaType, oItem) {
                                 return oItem.property[subCriteriaType];
                             }.bind(this, sProperty),
-                            getUi5Spec: function (oAdjust, oItem) {
+                            getUi5Spec: function (oAdjust, oItem, iValue) {
+                                //restriction: maximum one binding path apperently?
+                                iValue = typeof iValue === "undefined" ? this.value(oItem, sProperty) : iValue;
+
                                 oAdjust.properties = typeof oAdjust.properties != "undefined" ? oAdjust.properties : [];
                                 var oProp = {};
-                                oProp[this.subCriteriaType] = this.value(oItem, sProperty);
+                                oProp[this.subCriteriaType] = iValue;
                                 oAdjust.properties.push(oProp);
                             },
                             assert: function (subCriteriaType) {
@@ -430,7 +430,7 @@ sap.ui.define([
                             }.bind(this, sProperty),
                             assertField: function (sValue) {
                                 return {
-                                    fn: false,
+                                    type: "property",
                                     value: this.subCriteriaType
                                 }
                             }
@@ -520,6 +520,9 @@ sap.ui.define([
             "sap.m.ObjectListItem": {
                 cloned: true,
                 preferredProperties: ["title"]
+            },
+            "sap.m.List": {
+                defaultInteraction: "root"
             },
             "sap.m.Button": {
                 defaultAction: "PRS",

@@ -889,6 +889,7 @@ else {
             setTimeout(function () {
                 this.onClick(oLastDom);
                 oLastDom = null;
+                this._bActive = false;
             }.bind(this), 10);
         }
     };
@@ -962,7 +963,7 @@ else {
                 if (this._bActive === false) {
                     //no active recording, but still recording ongoing (e.g. in the other tab..)
                     if (this._bScreenLocked === true) {
-                        MessageToast.show("Please finalize the step in the Popup, before proceeding...");
+                        sap.m.MessageToast.show("Please finalize the step in the Popup, before proceeding...");
                         event.preventDefault();
                         event.stopPropagation();
                         event.stopImmediatePropagation();
@@ -978,7 +979,7 @@ else {
             }.bind(this));
         }.bind(this));
 
-        MessageToast.show("Testing Framework Initialized...");
+        sap.m.MessageToast.show("Testing Framework Initialized...");
     };
 
     TestHandler.prototype._getParentWithDom = function (oItem, iCounter, bViewOnly) {
@@ -1049,6 +1050,9 @@ else {
                 defaultAttributes: function (oItem) {
                     return [{ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "src" }];
                 }
+            },
+            "sap.m.List": {
+                defaultInteraction: "root"
             },
             "sap.m.ObjectListItem": {
                 cloned: true,
