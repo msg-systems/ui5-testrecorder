@@ -345,11 +345,6 @@ sap.ui.define([
         this._updatePreview();
     };
 
-    TestDetails.prototype.onShowActionSettings = function (oEvent) {
-        this._createActionPopover();
-        this._oPopoverAction.openBy(oEvent.getSource());
-    };
-
     TestDetails.prototype._initMessagePopover = function () {
     };
 

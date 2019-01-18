@@ -366,6 +366,7 @@ sap.ui.define([
                         aReturn.push({
                             subCriteriaType: sBinding,
                             subCriteriaText: sBinding,
+                            bindingRef: oItem.binding[sBinding],
                             code: function (sBinding, sValue) {
                                 var oReturn = { binding: {} };
                                 oReturn.binding[sBinding] = {
@@ -377,11 +378,20 @@ sap.ui.define([
                                 //restriction: maximum one binding path apperently?
                                 iValue = typeof iValue === "undefined" ? this.value(oItem) : iValue;
 
-                                oAdjust.bindingPath = typeof oAdjust.bindingPath != "undefined" ? oAdjust.bindingPath : {};
-                                oAdjust.bindingPath = {
-                                    propertyPath: this.subCriteriaType,
-                                    path: iValue
-                                };
+                                if (this.bindingRef.model === "i18n") {
+                                    oAdjust.I18NText = typeof oAdjust.I18NText != "undefined" ? oAdjust.I18NText : {};
+                                    oAdjust.I18NText = {
+                                        propertyName: this.subCriteriaType,
+                                        key: iValue
+                                    };
+                                } else {
+                                    oAdjust.bindingPath = typeof oAdjust.bindingPath != "undefined" ? oAdjust.bindingPath : {};
+                                    oAdjust.bindingPath = {
+                                        propertyPath: this.subCriteriaType,
+                                        path: iValue,
+                                        model: this.bindingRef.model
+                                    };
+                                }
                             },
                             value: function (subCriteriaType, oItem) {
                                 return oItem.binding[subCriteriaType].path;
@@ -523,6 +533,10 @@ sap.ui.define([
             },
             "sap.m.List": {
                 defaultInteraction: "root"
+            },
+            "sap.m.MultiInput": {
+                defaultInteraction: "root",
+                defaultEnter: true
             },
             "sap.m.Button": {
                 defaultAction: "PRS",

@@ -36,15 +36,6 @@
 
         <semantic:content>
             <Panel expandable="false" expanded="true" width="auto">
-                <headerToolbar>
-                    <Toolbar active="true" press="onExpandControl" height="3rem" style="Clear">
-                        <ToolbarSpacer/>
-                        <Button  visible="{= ${viewModel>/quickMode} === true }" type="Reject" text="Cancel" press="_onStopFromQuick"/>
-                        <Button  visible="{= ${viewModel>/quickMode} === true }" type="Accept" text="Re-Select" press="_onNewStepFromQuick"/>
-                        <Button visible="{= ${viewModel>/quickMode} === false }" id="btClose" type="Reject" text="Cancel" press="_onCancelStep"/>
-                        <Button visible="{= ${viewModel>/quickMode} === false }" id="btSave" type="Accept" text="Save Step" press="_onSave"/>
-                    </Toolbar>
-                </headerToolbar>
                 <f:SimpleForm editable="true" layout="ResponsiveGridLayout" labelSpanXL="3" labelSpanL="3" labelSpanM="3" labelSpanS="12" adjustLabelSpan="false" emptySpanXL="4" emptySpanL="4" emptySpanM="4" emptySpanS="0" columnsXL="1" columnsL="1" columnsM="1" singleContainerFullSize="false">
                     <f:content>
                         <Label text="Type" />
@@ -76,7 +67,6 @@
                             </Select>
                         </HBox>
 
-
                         <Label text="Assert-Type" visible="{= ( ${viewModel>/element/property/type} === 'ASS' ) }" />
                         <Select id="tstAssType" change="onUpdatePreview" items="{viewModel>/statics/assertType}" visible="{= ( ${viewModel>/element/property/type} === 'ASS' ) }" selectedKey="{viewModel>/element/property/assKey}">
                             <items>
@@ -104,12 +94,20 @@
                         <Label text="UI5-Id" visible="{= ( ${viewModel>/element/property/selectItemBy} === 'UI5' ) }"/>
                         <Input change="onUpdatePreview" value="{viewModel>/element/item/identifier/ui5Id}" valueState="{viewModel>/idQualityState}" valueStateText="{viewModel>/idQualityStateText}" visible="{= ( ${viewModel>/element/property/selectItemBy} === 'UI5' ) }"/>
                         <Label text="Rating"/>
-
                         <HBox>
                             <RatingIndicator id="RIValue" maxValue="5" enabled="false" class="sapUiSmallMarginBegin sapUiSmallMarginEnd" value="{viewModel>/element/ratingOfAttributes}" tooltip="Rating of selected Attributes" />
                             <Button press="onExplain" type="Transparent" icon="sap-icon://message-popup" text="{= ${viewModel>/element/messages}.length }" tooltip="Explain Rating"/>
                         </HBox>
 
+                        <Label text="Element-Name"/>
+                        <HBox>
+                            <Input id="inpTechName" editable="{viewModel>/element/property/useTechnicalName}" valueLiveUpdate="true" liveChange="onUpdatePreview" change="onUpdatePreview" value="{viewModel>/element/property/technicalName}">
+                                <layoutData>
+                                    <FlexItemData growFactor="1"/>
+                                </layoutData>
+                            </Input>
+                            <Switch state="{viewModel>/element/property/useTechnicalName}" tooltip="Use technical name over direct element access"/>
+                        </HBox>
                     </f:content>
                 </f:SimpleForm>
             </Panel>

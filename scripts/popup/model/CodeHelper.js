@@ -11,6 +11,8 @@ sap.ui.define([
     });
 
     CodeHelper.prototype.getFullCode = function (oCodeSettings, aElements) {
+        this._aNameStack = {};
+
         this._oModel.setProperty("/codeSettings", oCodeSettings);
         if (oCodeSettings.language === "OPA") {
             return this._opaGetCode(aElements);;
@@ -23,12 +25,15 @@ sap.ui.define([
     };
 
     CodeHelper.prototype.getItemCode = function (sCodeLanguage, oElement) {
+        this._aNameStack = {};
+
         if (sCodeLanguage === "OPA") {
             return this._getOPACodeFromItem(oElement);
         } else if (sCodeLanguage === "TCF") {
             return this._getCodeFromItem(oElement);
         } else if (sCodeLanguage === "UI5") {
-            return this._getUI5CodeFromItem(oElement);
+            var oDef = this._getUI5CodeFromItem(oElement);
+            return oDef.definitons.concat(oDef.code);
         }
         return [];
     };
@@ -86,18 +91,23 @@ sap.ui.define([
 
         //make the rest of the OPA calls..
         for (var i = 0; i < aCluster.length; i++) {
-            var aLines = [];
+            var aLinesDef = [];
+            var aLinesCode = [];
+            this._aNameStack = {};
+
             sCode += "    it('Test " + i + "', function () {\n";
             for (var j = 0; j < aCluster[i].length; j++) {
                 var oElement = aCluster[i][j];
 
                 if (oElement.property.type !== "SUP") {
-                    aLines = this._getUI5CodeFromItem(oElement);
+                    var oRes = this._getUI5CodeFromItem(oElement);
+                    aLinesDef.push(oRes.definitons);
+                    aLinesCode.push(oRes.code);
                 }
-
-                for (var x = 0; x < aLines.length; x++) {
-                    sCode += "        " + aLines[x] + "\n";
-                }
+            }
+            var aLines = aLinesDef.concat(aLinesCode);
+            for (var x = 0; x < aLines.length; x++) {
+                sCode += "        " + aLines[x] + "\n";
             }
 
             sCode += "    });\n";
@@ -170,8 +180,14 @@ sap.ui.define([
     };
 
     CodeHelper.prototype._getUI5Element = function (oElement, oUI5Selector, oAssert) {
-        var sElement = "element";
         var bMulti = false;
+        //var sElementName = "";
+
+        //name should be as unique as possible.. prio1, is localid - might be bullshit of course.. but ya..
+        //sElementName = oElement.item.identifier.ui5LocalId;
+        //sElementName = sElementName.replace(/^ ;-/i, '');
+        var sElement = "element"; //make customizable, to get the name in it
+
         if (oElement.property.type === 'ASS' && (oElement.assertion.assertType === "MTC" || oElement.assertion.assertType === "EXS")) {
             bMulti = true;
         }
@@ -203,17 +219,17 @@ sap.ui.define([
         } else if (oElement.property.selectItemBy === "ATTR") {
             //go ahead by parentL4, L3, L2, L1 - for "cleaner" code, we will create seperate lines for every single one..
             var sParents = "";
-            if (oUI5Selector.parent) {
-                sParents = sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parent) + "))";
-            }
-            if (oUI5Selector.parentL2) {
-                sParents += "." + sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parentL4) + "))";
+            if (oUI5Selector.parentL4) {
+                sParents = sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parentL4) + "))";
             }
             if (oUI5Selector.parentL3) {
-                sParents += "." + sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parentL3) + "))";
+                sParents += (sParents.length > 0 ? "." : "") + sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parentL3) + "))";
             }
-            if (oUI5Selector.parentL4) {
-                sParents += "." + sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parentL4) + "))";
+            if (oUI5Selector.parentL2) {
+                sParents += (sParents.length > 0 ? "." : "") + sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parentL2) + "))";
+            }
+            if (oUI5Selector.parent) {
+                sParents += (sParents.length > 0 ? "." : "") + sElement + "(by.control( " + this._getSelectorToJSONString(oUI5Selector.parent) + "))";
             }
 
             //syntax: element().element().element().all(target_element)
@@ -222,6 +238,8 @@ sap.ui.define([
                 sElement = sParents + ".all(" + sOwnElement + ")";
             } else if (bMulti === true) {
                 sElement = sElement + ".all(by." + sOwnElement;
+            } else if (sParents.length) {
+                sElement = sParents + ".element(by." + sOwnElement;
             } else {
                 sElement = sElement + "(by." + sOwnElement;
             }
@@ -279,7 +297,21 @@ sap.ui.define([
         }
 
         var sElement = this._getUI5Element(oElement, oUI5Selector);
+        var sElementAccess = sElement;
+        var aDefinitions = [];
+
+        if (oElement.property.useTechnicalName === true) {
+            sElement = "var " + oElement.property.technicalName + " = " + sElement + ";";
+
+            if (!this._aNameStack[oElement.item.identifier.ui5AbsoluteId]) {
+                this._aNameStack[oElement.item.identifier.ui5AbsoluteId] = oElement.property.technicalName;
+                aDefinitions.push(sElement);
+            }
+            sElementAccess = this._aNameStack[oElement.item.identifier.ui5AbsoluteId];
+        }
+
         var sAction = "";
+        var sText = "";
         if (sType === 'ACT') {
             sCode = sElement + ".";
             switch (sActType) {
@@ -296,17 +328,21 @@ sap.ui.define([
             if (sActType === "TYP" && oElement.property.selectActInsert.length === 0) {
                 //there is no native clearing.. :-) we have to select the next and press the delete key.. yeah
                 //we do not have to check "replace text" - empty text means ALWAYS replace
-                sCode = sElement + ".clear()";
+                sCode = sElementAccess + ".clear();";
                 aCode.push(sCode);
             } else {
+                sText = oElement.property.selectActInsert;
+                if (oElement.property.actionSettings.enter === true) {
+                    sText += "\\uE007"; //ENTER key - see https://github.com/SeleniumHQ/selenium/blob/master/javascript/node/selenium-webdriver/lib/input.js#L52
+                }
                 if (sActType === "TYP" && oElement.property.actionSettings.replaceText === true) {
-                    sCode = sElement + ".clear()";
+                    sCode = sElementAccess + ".clear();";
                     aCode.push(sCode);
                 }
 
-                sCode = sElement + "." + sAction + "(";
+                sCode = sElementAccess + "." + sAction + "(";
                 if (sActType == "TYP") {
-                    sCode = sCode + "'" + oElement.property.selectActInsert + "'";
+                    sCode = sCode + "'" + sText + "'";
                 }
                 sCode = sCode + ");";
                 aCode.push(sCode);
@@ -320,7 +356,7 @@ sap.ui.define([
                     var oAss = oElement.assertion.assertCode[i];
 
                     if (oAss.assertField.type == "property") {
-                        sCode = "expect(" + sElement + ".asControl().getProperty(\"" + oAss.assertField.value + "\")).toBe(";
+                        sCode = "expect(" + sElementAccess + ".asControl().getProperty(\"" + oAss.assertField.value + "\")).toBe(";
 
                         if (typeof oAss.assertValue === "boolean") {
                             sCode += oAss.assertValue;
@@ -333,21 +369,28 @@ sap.ui.define([
                     } else {
                         //we are actually searching for "exists" now. we will hand over the attributes we are searching for into the searching handler..
                         var sElementTmp = this._getUI5Element(oElement, oUI5Selector, oAss);
-                        sCode = "expect(" + sElementTmp + ".count()).toBeGreaterThan(0);";
+                        if (oElement.property.useTechnicalName === true) {
+                            sElementTmp = "var " + oElement.property.technicalName + i + " = " + sElementTmp + ";";
+                            aDefinitions.push(sElementTmp);
+                        }
+                        sCode = "expect(" + (oElement.property.technicalName + i) + ".count()).toBeGreaterThan(0);";
                     }
 
                     aCode.push(sCode);
                 }
             } else if (oElement.assertion.assertType === "EXS") {
-                sCode = "expect(" + sElement + ".count()).toBeGreaterThan(0);";
+                sCode = "expect(" + sElementAccess + ".count()).toBeGreaterThan(0);";
                 aCode = [sCode];
             } else if (oElement.assertion.assertType === "MTC") {
-                sCode = "expect(" + sElement + ".count()).toBe(" + oElement.assertion.assertMatchingCount + ");";
+                sCode = "expect(" + sElementAccess + ".count()).toBe(" + oElement.assertion.assertMatchingCount + ");";
                 aCode = [sCode];
             }
         }
 
-        return aCode;
+        return {
+            code: aCode,
+            definitons: aDefinitions
+        };
     };
 
     CodeHelper.prototype._getOPACodeFromItem = function (oElement) {
