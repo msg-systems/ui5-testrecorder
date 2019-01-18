@@ -21,7 +21,7 @@ sap.ui.define([
             Communication.registerEvent("stopped", this._onStopped.bind(this));
             Communication.registerEvent("loaded", this._onInjectionDone.bind(this));
             this._oURLPopover = this._oRecordDialog = sap.ui.xmlfragment(
-                "com.ui5.testing.view.SelectURL",
+                "com.ui5.testing.fragment.SelectURL",
                 this
             );
             this._oURLPopover.setModel(this._oModel, "viewModel");
