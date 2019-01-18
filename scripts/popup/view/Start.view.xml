@@ -8,10 +8,18 @@
     xmlns:av="sap.f" 
     xmlns:semantic="sap.m.semantic" 
     xmlns:core="sap.ui.core">
-    <semantic:FullscreenPage showFooter="false" showNavButton="false" title="UI5 Automated Testing" busy="{viewModel>/busy}">
+    <semantic:FullscreenPage 
+		showFooter="false" 
+		showNavButton="false" 
+		title="UI5 Automated Testing" 
+		busy="{viewModel>/busy}">
         <VBox fitContainer="true" height="100%">
             <HBox fitContainer="true" height="100%">
-                <GenericTile class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" header="Start a new Recording" press="onStartNewRecording" subheader="{viewModel>/currentUrl}">
+                <GenericTile 
+					class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" 
+					header="Start a new Recording" 
+					press="onStartNewRecording" 
+					subheader="{viewModel>/currentUrl}">
                     <TileContent>
                         <ImageContent src="sap-icon://record" />
                     </TileContent>
@@ -19,7 +27,10 @@
                         <FlexItemData alignSelf="Center"/>
                     </layoutData>
                 </GenericTile>
-                <GenericTile class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" header="List Existing Recordings" press="onOpenOverview">
+                <GenericTile 
+					class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" 
+					header="List Existing Recordings" 
+					press="onOpenOverview">
                     <TileContent>
                         <ImageContent src="sap-icon://list" />
                     </TileContent>
@@ -27,7 +38,10 @@
                         <FlexItemData alignSelf="Center"/>
                     </layoutData>
                 </GenericTile>
-                <GenericTile class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" header="Settings" press="onOpenSettings">
+                <GenericTile 
+					class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" 
+					header="Settings" 
+					press="onOpenSettings">
                     <TileContent>
                         <ImageContent src="sap-icon://settings" />
                     </TileContent>
@@ -35,7 +49,10 @@
                         <FlexItemData alignSelf="Center"/>
                     </layoutData>
                 </GenericTile>
-                <GenericTile class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" header="OData-Explorer" press="onMockserver">
+                <GenericTile 
+					class="sapUiTinyMarginBegin sapUiTinyMarginTop tileLayout" 
+					header="OData-Explorer"
+					press="onMockserver">
                     <TileContent>
                         <ImageContent src="sap-icon://database" />
                     </TileContent>

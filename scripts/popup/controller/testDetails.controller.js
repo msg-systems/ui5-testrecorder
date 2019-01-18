@@ -174,7 +174,7 @@ sap.ui.define([
 
     TestDetails.prototype._createDialog = function () {
         this._oRecordDialog = sap.ui.xmlfragment(
-            "com.ui5.testing.view.RecordDialog",
+            "com.ui5.testing.fragment.RecordDialog",
             this
         );
         this._oRecordDialog.setModel(this._oModel, "viewModel");

@@ -1,4 +1,4 @@
-<mvc:View controllerName="com.ui5.testing.controller.Settings" 
+<mvc:View 
     xmlns="sap.m" 
     xmlns:l="sap.ui.layout" 
     xmlns:mvc="sap.ui.core.mvc" 
@@ -7,13 +7,37 @@
     xmlns:u="sap.ui.unified" 
     xmlns:av="sap.f" 
     xmlns:semantic="sap.m.semantic" 
-    xmlns:core="sap.ui.core">
-    <semantic:FullscreenPage navButtonPress="onNavBack" showFooter="true" showNavButton="true" title="Global Settings" busy="{settingsModel>/busy}">
+    xmlns:core="sap.ui.core"
+	controllerName="com.ui5.testing.controller.Settings">
+    <semantic:FullscreenPage 
+		navButtonPress="onNavBack" 
+		showFooter="true" 
+		showNavButton="true" 
+		title="Global Settings" 
+		busy="{settingsModel>/busy}">
         <semantic:content>
-            <f:SimpleForm editable="true" layout="ResponsiveGridLayout" labelSpanXL="3" labelSpanL="3" labelSpanM="3" labelSpanS="12" adjustLabelSpan="false" emptySpanXL="4" emptySpanL="4" emptySpanM="4" emptySpanS="0" columnsXL="1" columnsL="1" columnsM="1" singleContainerFullSize="false">
+            <f:SimpleForm 
+				editable="true" 
+				layout="ResponsiveGridLayout" 
+				labelSpanXL="3" 
+				labelSpanL="3" 
+				labelSpanM="3" 
+				labelSpanS="12" 
+				adjustLabelSpan="false" 
+				emptySpanXL="4" 
+				emptySpanL="4" 
+				emptySpanM="4" 
+				emptySpanS="0" 
+				columnsXL="1" 
+				columnsL="1" 
+				columnsM="1" 
+				singleContainerFullSize="false">
                 <f:content>
                     <Label text="Default Language"/>
-                    <Select id="tstLanguage" items="{settingsModel>/codeLanguages}" selectedKey="{settingsModel>/settings/defaultLanguage}">
+                    <Select 
+						id="tstLanguage" 
+						items="{settingsModel>/codeLanguages}" 
+						selectedKey="{settingsModel>/settings/defaultLanguage}">
                         <items>
                             <core:Item text="{settingsModel>text}" key="{settingsModel>key}"/>
                         </items>
