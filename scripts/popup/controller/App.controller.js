@@ -3,9 +3,5 @@ sap.ui.define([
 ], function (Controller) {
     "use strict";
 
-    return Controller.extend("com.ui5.testing.controller.App", {
-        onInit: function () {
-        }
-    });
-}
-);
+    return Controller.extend("com.ui5.testing.controller.App", {});
+});
