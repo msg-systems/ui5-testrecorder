@@ -1116,23 +1116,6 @@ sap.ui.define([
                     //work on our binding context information..
                     var oItem = this._oModel.getProperty("/element/item");
                     var aList = [];
-                    if (!jQuery.isEmptyObject(oItem.context)) {
-                        for (var sModel in oItem.context) {
-                            for (var sAttribute in oItem.context[sModel]) {
-                                if (typeof oItem.context[sModel][sAttribute] !== "object") {
-                                    aList.push({
-                                        type: "BDG",
-                                        typeTxt: "Context",
-                                        bdgPath: sModel + "/" + sAttribute,
-                                        attribute: sAttribute,
-                                        value: oItem.context[sModel][sAttribute],
-                                        importance: oItem.uniquness.context[sModel][sAttribute],
-                                        valueToString: oItem.context[sModel][sAttribute].toString ? oItem.context[sModel][sAttribute].toString() : oItem.context[sModel][sAttribute]
-                                    });
-                                }
-                            }
-                        }
-                    }
                     if (!jQuery.isEmptyObject(oItem.binding)) {
                         for (var sAttr in oItem.binding) {
                             if (typeof oItem.binding[sAttr].path !== "object") {
@@ -1160,6 +1143,23 @@ sap.ui.define([
                                     value: oItem.property[sAttr],
                                     valueToString: oItem.property[sAttr].toString ? oItem.property[sAttr].toString() : oItem.property[sAttr]
                                 });
+                            }
+                        }
+                    }
+                    if (!jQuery.isEmptyObject(oItem.context)) {
+                        for (var sModel in oItem.context) {
+                            for (var sAttribute in oItem.context[sModel]) {
+                                if (typeof oItem.context[sModel][sAttribute] !== "object") {
+                                    aList.push({
+                                        type: "BDG",
+                                        typeTxt: "Context",
+                                        bdgPath: sModel + "/" + sAttribute,
+                                        attribute: sAttribute,
+                                        value: oItem.context[sModel][sAttribute],
+                                        importance: oItem.uniquness.context[sModel][sAttribute],
+                                        valueToString: oItem.context[sModel][sAttribute].toString ? oItem.context[sModel][sAttribute].toString() : oItem.context[sModel][sAttribute]
+                                    });
+                                }
                             }
                         }
                     }

@@ -356,7 +356,17 @@ sap.ui.define([
                     var oAss = oElement.assertion.assertCode[i];
 
                     if (oAss.assertField.type == "property") {
-                        sCode = "expect(" + sElementAccess + ".asControl().getProperty(\"" + oAss.assertField.value + "\")).toBe(";
+                        sCode = "expect(" + sElementAccess + ".asControl().getProperty(\"" + oAss.assertField.value + "\")).";
+
+                        if (oAss.assertOperator == 'EQ') {
+                            sCode += 'toBe('
+                        } else if (oAss.assertOperator === 'NE') {
+                            sCode += 'not.toBe('
+                        } else if (oAss.assertOperator === 'CP') {
+                            sCode += 'toContain('
+                        } else if (oAss.assertOperator === 'NP') {
+                            sCode += 'not.toContain('
+                        }
 
                         if (typeof oAss.assertValue === "boolean") {
                             sCode += oAss.assertValue;
@@ -364,6 +374,11 @@ sap.ui.define([
                             sCode += oAss.assertValue;
                         } else {
                             sCode += '"' + oAss.assertValue + '"';
+                        }
+                        if (oElement.property.assertMessage) {
+                            sCode += ",\"" + oElement.property.assertMessage + "\");";
+                        } else {
+                            sCode += ");";
                         }
                         sCode += ");"
                     } else {
@@ -373,16 +388,31 @@ sap.ui.define([
                             sElementTmp = "var " + oElement.property.technicalName + i + " = " + sElementTmp + ";";
                             aDefinitions.push(sElementTmp);
                         }
-                        sCode = "expect(" + (oElement.property.technicalName + i) + ".count()).toBeGreaterThan(0);";
+                        sCode = "expect(" + (oElement.property.technicalName + i) + ".count()).toBeGreaterThan(0";
+                        if (oElement.property.assertMessage) {
+                            sCode += ",\"" + oElement.property.assertMessage + "\");";
+                        } else {
+                            sCode += ");";
+                        }
                     }
 
                     aCode.push(sCode);
                 }
             } else if (oElement.assertion.assertType === "EXS") {
-                sCode = "expect(" + sElementAccess + ".count()).toBeGreaterThan(0);";
+                sCode = "expect(" + sElementAccess + ".count()).toBeGreaterThan(0";
+                if (oElement.property.assertMessage) {
+                    sCode += ",\"" + oElement.property.assertMessage + "\");";
+                } else {
+                    sCode += ");";
+                }
                 aCode = [sCode];
             } else if (oElement.assertion.assertType === "MTC") {
-                sCode = "expect(" + sElementAccess + ".count()).toBe(" + oElement.assertion.assertMatchingCount + ");";
+                sCode = "expect(" + sElementAccess + ".count()).toBe(" + oElement.assertion.assertMatchingCount;
+                if (oElement.property.assertMessage) {
+                    sCode += ",\"" + oElement.property.assertMessage + "\");";
+                } else {
+                    sCode += ");";
+                }
                 aCode = [sCode];
             }
         }

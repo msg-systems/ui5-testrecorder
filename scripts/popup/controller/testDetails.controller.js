@@ -254,6 +254,10 @@ sap.ui.define([
             this._oModel.setProperty("/codeSettings/testCategory", oData.title);
             this._oModel.setProperty("/codeSettings/testUrl", oData.url);
             RecordController.startRecording(bImmediate);
+            if ( bImmediate === true ) {
+                this._oRecordDialog.close();
+            }
+            
             this.getRouter().navTo("testDetails", {
                 TestId: this.getModel("navModel").getProperty("/test/uuid")
             });
@@ -337,7 +341,7 @@ sap.ui.define([
                 this.getModel("navModel").setProperty("/test", oSave.test);
                 this._updatePreview();
             }.bind(this));
-        } else if (this.getModel("recordModel").getProperty("/recording") === true) {
+        } else if (this.getModel("recordModel").getProperty("/recording") === true && this._bQuickMode === false) {
             setTimeout(function () {
                 this._oRecordDialog.open();
             }.bind(this), 100);

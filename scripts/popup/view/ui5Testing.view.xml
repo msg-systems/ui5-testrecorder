@@ -106,7 +106,7 @@
                                     <FlexItemData growFactor="1"/>
                                 </layoutData>
                             </Input>
-                            <Switch state="{viewModel>/element/property/useTechnicalName}" tooltip="Use technical name over direct element access"/>
+                            <Switch change="onUpdatePreview" state="{viewModel>/element/property/useTechnicalName}" tooltip="Use technical name over direct element access"/>
                         </HBox>
                     </f:content>
                 </f:SimpleForm>
