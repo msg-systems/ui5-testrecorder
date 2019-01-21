@@ -404,7 +404,9 @@ sap.ui.define([
 
     TestDetails.prototype.onEditStep = function (oEvent) {
         //set the current step on not activate..
-        this.getModel("navModel").setProperty("/elements/" + this._iCurrentStep + "/stepExecuted", false)
+        var iNumber = oEvent.getSource().getBindingContext("navModel").getPath().split("/");
+        this._iCurrentStep = parseInt(iNumber[iNumber.length - 1],10);
+        this.getModel("navModel").setProperty("/elements/" + this._iCurrentStep + "/stepExecuted", false);
         this.getRouter().navTo("elementDisplay", {
             TestId: this.getModel("navModel").getProperty("/test/uuid"),
             ElementId: this._iCurrentStep

@@ -991,7 +991,7 @@ sap.ui.define([
 
     TestHandler.prototype._getMergedClassArray = function (oItem) {
         var aClassArray = this._getClassArray(oItem);
-        var oReturn = { defaultAction: { "": "" }, askForBindingContext: false, preferredProperties: [], defaultInteraction: null, defaultBlur: false, defaultEnter: false, cloned: false, defaultAttributes: [], actions: {} };
+        var oReturn = { defaultAction: { "": "" }, preferredType: "ACT", askForBindingContext: false, preferredProperties: [], defaultInteraction: null, defaultBlur: false, defaultEnter: false, cloned: false, defaultAttributes: [], actions: {} };
         //merge from button to top (while higher elements are overwriting lower elements)
         for (var i = 0; i < aClassArray.length; i++) {
             var oClass = aClassArray[i];
@@ -1003,6 +1003,8 @@ sap.ui.define([
                     domChildWith: "", action: oClass.defaultAction
                 }];
             }
+            
+            oReturn.preferredType = typeof oClass.preferredType !== "undefined" ? oClass.preferredType : oReturn.preferredType;
             oReturn.defaultEnter = typeof oClass.defaultEnter !== "undefined" ? oClass.defaultEnter : null;
             oReturn.defaultBlur = typeof oClass.defaultBlur !== "undefined" ? oClass.defaultBlur : null;
             oReturn.defaultInteraction = typeof oClass.defaultInteraction !== "undefined" ? oClass.defaultInteraction : null;
@@ -1073,11 +1075,15 @@ sap.ui.define([
             }
 
             if (typeof oMerged.defaultBlur !== "undefined" && oMerged.defaultBlur !== null ) {
-                this._oModel.setProperty("/element/property/actionSettings/blur", oMerged.defaultBlur)
+                this._oModel.setProperty("/element/property/actionSettings/blur", oMerged.defaultBlur);
+            }
+
+            if (typeof oMerged.preferredType !== "undefined" && oMerged.preferredType !== null) {
+                this._oModel.setProperty("/element/property/type", oMerged.preferredType)
             }
 
             if (typeof oMerged.defaultEnter !== "undefined" && oMerged.defaultEnter !== null) {
-                this._oModel.setProperty("/element/property/actionSettings/enter", oMerged.defaultEnter)
+                this._oModel.setProperty("/element/property/actionSettings/enter", oMerged.defaultEnter);
             }
 
             //try to find the best name..

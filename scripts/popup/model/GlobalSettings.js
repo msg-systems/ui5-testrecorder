@@ -309,7 +309,7 @@ sap.ui.define([
                     for (var i = 0; i < oMetadata.length; i++) {
                         var sElementName = oMetadata[i].elementName;
                         var oType = _oElementModelValues[sElementName];
-
+                        
                         if (oType) {
                             for (var sModel in oType) {
 
@@ -589,8 +589,7 @@ sap.ui.define([
             },
             "sap.m.GenericTile": {
                 defaultAction: "PRS",
-                defaultAttributes: [{ attributeType: "OWN", criteriaType: "MODL", subCriteriaType: "undefined//config/navigation_semantic_action" },
-                { attributeType: "OWN", criteriaType: "MODL", subCriteriaType: "undefined//config/navigation_semantic_object" }]
+                defaultAttributes: [{ attributeType: "PRT2", criteriaType: "ATTR", subCriteriaType: "target" }]
             },
             "sap.m.MultiComboBox": {
                 defaultAction: "PRS",
@@ -599,7 +598,8 @@ sap.ui.define([
                 }
             },
             "sap.m.Text": {
-                preferredProperties: ["text"]
+                preferredProperties: ["text"],
+                preferredType: "ASS"
             },
             "sap.m.Select": {
                 defaultAction: "PRS",
