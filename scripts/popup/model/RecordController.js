@@ -4,10 +4,10 @@ sap.ui.define([
     "com/ui5/testing/model/Communication",
     "com/ui5/testing/model/Navigation",
     "sap/m/MessageToast"
-], function (Object, JSONModel, Communication, Navigation, MessageToast) {
+], function (UI5Object, JSONModel, Communication, Navigation, MessageToast) {
     "use strict";
 
-    var RecordController = Object.extend("com.ui5.testing.model.RecordController", {
+    var RecordController = UI5Object.extend("com.ui5.testing.model.RecordController", {
         constructor: function () {
             var oJSON = {
                 recording: false

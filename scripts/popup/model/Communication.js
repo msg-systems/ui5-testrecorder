@@ -1,9 +1,9 @@
 sap.ui.define([
     "sap/ui/base/Object"
-], function (Object) {
+], function (UI5Object) {
     "use strict";
 
-    var Messaging = Object.extend("com.ui5.testing.model.Communication", {
+    var Messaging = UI5Object.extend("com.ui5.testing.model.Communication", {
         _aEvents: {},
         _oUUIDs: {},
         _sTabId: "",

@@ -1746,7 +1746,8 @@ else {
             if (oBinding) {
                 oReturn.binding[sBinding] = {
                     path: oBinding.sPath && oBinding.getPath(),
-                    "static": oBinding.oModel && oBinding.getModel() instanceof sap.ui.model.resource.ResourceModel
+                    "static": oBinding.oModel && oBinding.getModel() instanceof sap.ui.model.resource.ResourceModel,
+                    parts: oItem.mBindingInfos[sBinding].parts
                 };
             } else {
                 var oBindingInfo = oItem.getBindingInfo(sBinding);
@@ -1754,9 +1755,12 @@ else {
                     continue;
                 }
                 if (oBindingInfo.path) {
+                    debugger
                     oReturn.binding[sBinding] = {
                         path: oBindingInfo.path,
-                        "static": true
+                        "static": true,
+                        parts: oItem.mBindingInfos[sBinding].parts
+
                     };
                 } else if (oBindingInfo.parts && oBindingInfo.parts.length > 0) {
                     for (var i = 0; i < oBindingInfo.parts.length; i++) {
@@ -1764,8 +1768,13 @@ else {
                             continue;
                         }
                         if (!oReturn.binding[sBinding]) {
-                            oReturn.binding[sBinding] = { path: oBindingInfo.parts[i].path, "static": true };
+                            debugger
+                            oReturn.binding[sBinding] = { 
+                                path: oBindingInfo.parts[i].path, 
+                                "static": true, 
+                                parts: oItem.mBindingInfos[sBinding].parts };
                         } else {
+                            debugger
                             oReturn.binding[sBinding].path += ";" + oBindingInfo.parts[i].path;
                         }
                     }
