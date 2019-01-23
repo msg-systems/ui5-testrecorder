@@ -3,10 +3,10 @@ sap.ui.define([
     "sap/ui/model/json/JSONModel",
     "sap/ui/model/odata/v2/ODataModel",
     "com/ui5/testing/model/Communication"
-], function (Object, JSONModel, ODataModel, Communication) {
+], function (UI5Object, JSONModel, ODataModel, Communication) {
     "use strict";
 
-    var Mockserver = Object.extend("com.ui5.testing.model.Mockserver", {
+    var Mockserver = UI5Object.extend("com.ui5.testing.model.Mockserver", {
         constructor: function () {
             var oJSON = {
             };

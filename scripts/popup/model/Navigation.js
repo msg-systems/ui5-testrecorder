@@ -1,10 +1,10 @@
 sap.ui.define([
     "sap/ui/base/Object",
     "sap/ui/model/json/JSONModel"
-], function (Object, JSONModel) {
+], function (UI5Object, JSONModel) {
     "use strict";
 
-    var Navigation = Object.extend("com.ui5.testing.model.Navigation", {
+    var Navigation = UI5Object.extend("com.ui5.testing.model.Navigation", {
         constructor: function () {
             var oJSON = {
                 item: {},

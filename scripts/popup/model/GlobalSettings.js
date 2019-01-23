@@ -1,10 +1,10 @@
 sap.ui.define([
     "sap/ui/base/Object",
     "sap/ui/model/json/JSONModel"
-], function (Object, JSONModel) {
+], function (UI5Object, JSONModel) {
     "use strict";
 
-    var GlobalSettings = Object.extend("com.ui5.testing.model.GlobalSettings", {
+    var GlobalSettings = UI5Object.extend("com.ui5.testing.model.GlobalSettings", {
         constructor: function () {
             var oJSON = {
                 settings: {
@@ -24,7 +24,7 @@ sap.ui.define([
                     },
                     {
                         key: "OPA",
-                        text: "OPA5 (Alpha)"
+                        text: "OPA5 (Beta)"
                     }
                 ],
             };

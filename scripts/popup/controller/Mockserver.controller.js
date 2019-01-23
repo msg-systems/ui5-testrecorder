@@ -23,30 +23,30 @@ sap.ui.define([
 
         _initFragments: function () {
             this._oFakerDialog = sap.ui.xmlfragment(
-                "com.ui5.testing.view.SelectFaker",
+                "com.ui5.testing.fragment.SelectFaker",
                 this
             );
             this._oFakerDialog.setModel(this._oModel, "viewModel");
             this._oFixedValueDialog = sap.ui.xmlfragment(
-                "com.ui5.testing.view.SelectFixedValue",
+                "com.ui5.testing.fragment.SelectFixedValue",
                 this
             );
             this._oFixedValueDialog.setModel(this._oModel, "viewModel");
             this._oMultipleValueDialog = sap.ui.xmlfragment("multiple_dialog",
-                "com.ui5.testing.view.SelectMultipleValues",
+                "com.ui5.testing.fragment.SelectMultipleValues",
                 this
             );
             this._oMultipleValueDialog.setModel(this._oModel, "viewModel");
             this._oMultipleValueDialogTable = sap.ui.core.Fragment.byId("multiple_dialog", "tbl");
 
             this._oAssocGenerateDialog = sap.ui.xmlfragment("multiple_dialog",
-                "com.ui5.testing.view.SelectAssociationGeneration",
+                "com.ui5.testing.fragment.SelectAssociationGeneration",
                 this
             );
             this._oAssocGenerateDialog.setModel(this._oModel, "viewModel");
 
             this._oFormulaDialog = sap.ui.xmlfragment("formula_dialog",
-                "com.ui5.testing.view.SelectFormula",
+                "com.ui5.testing.fragment.SelectFormula",
                 this
             );
             this._oFormulaDialog.setModel(this._oModel, "viewModel");
@@ -398,7 +398,7 @@ sap.ui.define([
             // create action sheet only once
             if (!this._oSelectActionSheet) {
                 this._oSelectActionSheet = sap.ui.xmlfragment(
-                    "com.ui5.testing.view.ValueSelectionActionSheet",
+                    "com.ui5.testing.fragment.ValueSelectionActionSheet",
                     this
                 );
                 this.getView().addDependent(this._oSelectActionSheet);
