@@ -24,7 +24,7 @@ sap.ui.define([
                     },
                     {
                         key: "OPA",
-                        text: "OPA5 (Alpha)"
+                        text: "OPA5 (Beta)"
                     }
                 ],
             };
