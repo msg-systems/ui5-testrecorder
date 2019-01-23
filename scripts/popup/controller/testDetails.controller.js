@@ -432,5 +432,20 @@ sap.ui.define([
         return "Success";
     };
 
+    TestDetails.prototype.downloadSource = function(oEvent) {
+        var sSourceCode = oEvent.getSource().getParent().getContent().filter(c => c instanceof sap.ui.codeeditor.CodeEditor)[0].getValue();
+        var element = document.createElement('a');
+        element.setAttribute('href', 'data:text/javascript;charset=utf-8,'+encodeURIComponent(sSourceCode));
+        var fileName = oEvent.getSource().getParent().getText().replace(/\-/g, '_');
+        fileName = fileName.indexOf('.js') > -1 ? fileName : fileName + '.js';
+        element.setAttribute('download', fileName);
+
+        element.style.display = 'none';
+        document.body.appendChild(element);
+
+        element.click();
+        document.body.removeChild(element);
+    };
+
     return TestDetails;
 });

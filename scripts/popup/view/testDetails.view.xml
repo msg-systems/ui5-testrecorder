@@ -188,7 +188,16 @@
                                             value="{viewModel>code}"
                                             editable="true">
                                     </code:CodeEditor>
-                                    <FormattedText visible="{= ${viewModel>type} === 'FTXT'}" htmlText="{viewModel>code}"/>
+                                    <FormattedText 
+										visible="{= ${viewModel>type} === 'FTXT'}" 
+										htmlText="{viewModel>code}"/>
+									<Button 
+									    id="downloadButton" 
+									    type="Transparent"
+									    class="btnFloat btnCircle" 
+									    icon="sap-icon://download"
+									    press="downloadSource"
+                                        visible="{= ${viewModel>type} === 'CODE'}"/>
                                 </IconTabFilter>
                             </items>
                         </IconTabBar>
