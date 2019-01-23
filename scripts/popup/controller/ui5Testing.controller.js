@@ -44,12 +44,15 @@ sap.ui.define([
                     actKey: "PRS",
                     type: "ACT",
                     selectItemBy: "UI5",
+                    technicalName: "",
+                    useTechnicalName: true,
                     previewCode: "",
                     actionSettings: {
                         testSpeed: 1,
                         replaceText: false,
                         pasteText: false,
-                        blur: false
+                        blur: false,
+                        enter: false
                     },
                     supportAssistant: {
                         ignoreGlobal: false,
@@ -988,7 +991,7 @@ sap.ui.define([
 
     TestHandler.prototype._getMergedClassArray = function (oItem) {
         var aClassArray = this._getClassArray(oItem);
-        var oReturn = { defaultAction: { "": "" }, askForBindingContext: false, preferredProperties: [], defaultInteraction: null, cloned: false, defaultAttributes: [], actions: {} };
+        var oReturn = { defaultAction: { "": "" }, preferredType: "ACT", askForBindingContext: false, preferredProperties: [], defaultInteraction: null, defaultBlur: false, defaultEnter: false, cloned: false, defaultAttributes: [], actions: {} };
         //merge from button to top (while higher elements are overwriting lower elements)
         for (var i = 0; i < aClassArray.length; i++) {
             var oClass = aClassArray[i];
@@ -1000,6 +1003,10 @@ sap.ui.define([
                     domChildWith: "", action: oClass.defaultAction
                 }];
             }
+            
+            oReturn.preferredType = typeof oClass.preferredType !== "undefined" ? oClass.preferredType : oReturn.preferredType;
+            oReturn.defaultEnter = typeof oClass.defaultEnter !== "undefined" ? oClass.defaultEnter : null;
+            oReturn.defaultBlur = typeof oClass.defaultBlur !== "undefined" ? oClass.defaultBlur : null;
             oReturn.defaultInteraction = typeof oClass.defaultInteraction !== "undefined" ? oClass.defaultInteraction : null;
             oReturn.cloned = oClass.cloned === true ? true : oReturn.cloned;
             oReturn.preferredProperties = oReturn.preferredProperties.concat(oClass.preferredProperties ? oClass.preferredProperties : []);
@@ -1067,6 +1074,30 @@ sap.ui.define([
                 this._oModel.setProperty("/element/property/selectItemBy", "UI5");
             }
 
+            if (typeof oMerged.defaultBlur !== "undefined" && oMerged.defaultBlur !== null ) {
+                this._oModel.setProperty("/element/property/actionSettings/blur", oMerged.defaultBlur);
+            }
+
+            if (typeof oMerged.preferredType !== "undefined" && oMerged.preferredType !== null) {
+                this._oModel.setProperty("/element/property/type", oMerged.preferredType)
+            }
+
+            if (typeof oMerged.defaultEnter !== "undefined" && oMerged.defaultEnter !== null) {
+                this._oModel.setProperty("/element/property/actionSettings/enter", oMerged.defaultEnter);
+            }
+
+            //try to find the best name..
+            //always: add the local Element Name..
+            var sName = oItem.metadata.elementName.split(".").splice(-1).pop();
+            if (oItem.binding && oItem.binding.value && oItem.binding.value.path) {
+                sName = oItem.binding.value.path + sName;
+            } else if (oItem.label && oItem.label.binding && oItem.label.binding.text && oItem.label.binding.text.static === true ) {
+                sName = oItem.label.binding.text.path + sName;
+            }
+            sName = sName.substr(0, 1).toLowerCase() + sName.substr( 1 );
+            
+            this._oModel.setProperty("/element/property/technicalName", sName);
+
             this._getFoundElements().then(function (aReturn) {
                 if (this._oModel.getProperty("/element/property/selectItemBy") === "UI5" && aReturn.length > 1) {
                     this._oModel.setProperty("/element/property/selectItemBy", "ATTR"); //change to attributee in case id is not sufficient..
@@ -1091,23 +1122,6 @@ sap.ui.define([
                     //work on our binding context information..
                     var oItem = this._oModel.getProperty("/element/item");
                     var aList = [];
-                    if (!jQuery.isEmptyObject(oItem.context)) {
-                        for (var sModel in oItem.context) {
-                            for (var sAttribute in oItem.context[sModel]) {
-                                if (typeof oItem.context[sModel][sAttribute] !== "object") {
-                                    aList.push({
-                                        type: "BDG",
-                                        typeTxt: "Context",
-                                        bdgPath: sModel + "/" + sAttribute,
-                                        attribute: sAttribute,
-                                        value: oItem.context[sModel][sAttribute],
-                                        importance: oItem.uniquness.context[sModel][sAttribute],
-                                        valueToString: oItem.context[sModel][sAttribute].toString ? oItem.context[sModel][sAttribute].toString() : oItem.context[sModel][sAttribute]
-                                    });
-                                }
-                            }
-                        }
-                    }
                     if (!jQuery.isEmptyObject(oItem.binding)) {
                         for (var sAttr in oItem.binding) {
                             if (typeof oItem.binding[sAttr].path !== "object") {
@@ -1135,6 +1149,23 @@ sap.ui.define([
                                     value: oItem.property[sAttr],
                                     valueToString: oItem.property[sAttr].toString ? oItem.property[sAttr].toString() : oItem.property[sAttr]
                                 });
+                            }
+                        }
+                    }
+                    if (!jQuery.isEmptyObject(oItem.context)) {
+                        for (var sModel in oItem.context) {
+                            for (var sAttribute in oItem.context[sModel]) {
+                                if (typeof oItem.context[sModel][sAttribute] !== "object") {
+                                    aList.push({
+                                        type: "BDG",
+                                        typeTxt: "Context",
+                                        bdgPath: sModel + "/" + sAttribute,
+                                        attribute: sAttribute,
+                                        value: oItem.context[sModel][sAttribute],
+                                        importance: oItem.uniquness.context[sModel][sAttribute],
+                                        valueToString: oItem.context[sModel][sAttribute].toString ? oItem.context[sModel][sAttribute].toString() : oItem.context[sModel][sAttribute]
+                                    });
+                                }
                             }
                         }
                     }

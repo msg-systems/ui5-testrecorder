@@ -234,11 +234,6 @@ else {
         document.dispatchEvent(new CustomEvent('do-ui5-from-inject-to-extension', { detail: { type: sEventType, data: oEventData } }));
     };
 
-    TestHandler.prototype.onShowActionSettings = function (oEvent) {
-        this._createActionPopover();
-        this._oPopoverAction.openBy(oEvent.getSource());
-    };
-
     TestHandler.prototype._getControlFromDom = function (oDomNode) {
         var oControls = jQuery(document.getElementById(oDomNode.id)).control();
         if (!oControls || !oControls.length) {
@@ -312,10 +307,25 @@ else {
             event.originalEvent = event;
             oDom.get(0).dispatchEvent(event);
 
-            //afterwards trigger the blur event, in order to trigger the change event
-            if (oItem.property.actionSettings.blur === true) {
+            //afterwards trigger the blur event, in order to trigger the change event (enter is not really the same.. but ya..)
+            if (oItem.property.actionSettings.blur === true ) {
                 var event = new MouseEvent('blur', {
                     view: window,
+                    bubbles: true,
+                    cancelable: true
+                });
+                event.originalEvent = event;
+                oDom.get(0).dispatchEvent(event);
+            }
+            if ( oItem.property.actionSettings.enter === true ) {
+                var event = new KeyboardEvent('keydown', {
+                    view: window,
+                    data: '',
+                    charCode: 0,
+                    code: "Enter",
+                    key: "Enter",
+                    keyCode: 13,
+                    which: 13,
                     bubbles: true,
                     cancelable: true
                 });
@@ -733,7 +743,7 @@ else {
 
     TestHandler.prototype._getMergedClassArray = function (oItem) {
         var aClassArray = this._getClassArray(oItem);
-        var oReturn = { defaultAction: { "": "" }, askForBindingContext: false, preferredProperties: [], cloned: false, defaultAttributes: [], actions: {} };
+        var oReturn = { defaultAction: { "": "" }, askForBindingContext: false, preferredProperties: [], cloned: false, actions: {} };
         //merge from button to top (while higher elements are overwriting lower elements)
         for (var i = 0; i < aClassArray.length; i++) {
             var oClass = aClassArray[i];
@@ -752,13 +762,6 @@ else {
             for (var j = 0; j < oClass.defaultAction.length; j++) {
                 oReturn.defaultAction[oClass.defaultAction[j].domChildWith] = oClass.defaultAction[j];
             }
-
-            if (typeof oClass.defaultAttributes === "function") {
-                aElementsAttributes = oClass.defaultAttributes(oItem);
-            } else if (oClass.defaultAttributes) {
-                aElementsAttributes = oClass.defaultAttributes;
-            }
-            oReturn.defaultAttributes = oReturn.defaultAttributes.concat(aElementsAttributes);
 
             oReturn.askForBindingContext = typeof oClass.askForBindingContext !== "undefined" && oReturn.askForBindingContext === false ? oClass.askForBindingContext : oReturn.askForBindingContext;
             for (var sAction in oClass.actions) {
@@ -1031,12 +1034,6 @@ else {
     TestHandler.prototype._defineElementBasedActions = function () {
         this._oElementMix = {
             "sap.m.StandardListItem": {
-                defaultAttributes: function (oItem) {
-                    if (!oItem.itemdata.control) {
-                        return [];
-                    }
-                    return [{ attributeType: "MCMB", criteriaType: "ATTR", subCriteriaType: "key" }];
-                }
             },
             "sap.ui.core.Element": {
                 defaultAction: "PRS",
@@ -1046,10 +1043,7 @@ else {
                 }
             },
             "sap.ui.core.Icon": {
-                preferredProperties: ["src"],
-                defaultAttributes: function (oItem) {
-                    return [{ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "src" }];
-                }
+                preferredProperties: ["src"]
             },
             "sap.m.List": {
                 defaultInteraction: "root"
@@ -1060,46 +1054,16 @@ else {
             },
             "sap.m.Button": {
                 defaultAction: "PRS",
-                preferredProperties: ["text", "icon"],
-                defaultAttributes: function (oItem) {
-                    var aReturn = [];
-                    if (oItem.binding.text) {
-                        aReturn.push({ attributeType: "OWN", criteriaType: "BNDG", subCriteriaType: "text" });
-                    }
-                    if (oItem.binding.icon) {
-                        aReturn.push({ attributeType: "OWN", criteriaType: "BNDG", subCriteriaType: "icon" });
-                    } else if (oItem.property.icon) {
-                        aReturn.push({ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "icon" });
-                    }
-                    if (oItem.binding.tooltip) {
-                        aReturn.push({ attributeType: "OWN", criteriaType: "BNDG", subCriteriaType: "tooltip" });
-                    }
-                    return aReturn;
-                }
+                preferredProperties: ["text", "icon"]
             },
             "sap.m.ListItemBase": {
                 cloned: true,
                 askForBindingContext: true
             },
             "sap.ui.core.Item": {
-                cloned: true,
-                defaultAttributes: function (oItem) {
-                    return [{ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "key" }];
-                }
+                cloned: true
             },
             "sap.m.Link": {
-                defaultAttributes: function (oItem) {
-                    //if the text is static --> take the binding with priority..
-                    if (oItem.binding && oItem.binding["text"] && oItem.binding["text"].static === true) {
-                        return [{ attributeType: "OWN", criteriaType: "BNDG", subCriteriaType: "text" }];
-                    } else if (oItem.property.text && oItem.property.text.length > 0) {
-                        return [{ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "text" }];
-                    } else if (oItem.property.text && oItem.property.text.length > 0) {
-                        return [{ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "target" }];
-                    } else if (oItem.property.text && oItem.property.text.length > 0) {
-                        return [{ attributeType: "OWN", criteriaType: "ATTR", subCriteriaType: "href" }];
-                    }
-                }
             },
             "sap.m.ComboBoxBase": {
                 defaultAction: "PRS",
@@ -1108,9 +1072,7 @@ else {
                 }
             },
             "sap.m.GenericTile": {
-                defaultAction: "PRS",
-                defaultAttributes: [{ attributeType: "OWN", criteriaType: "MODL", subCriteriaType: "undefined//config/navigation_semantic_action" },
-                { attributeType: "OWN", criteriaType: "MODL", subCriteriaType: "undefined//config/navigation_semantic_object" }]
+                defaultAction: "PRS"
             },
             "sap.m.MultiComboBox": {
                 defaultAction: "PRS",
@@ -1742,43 +1704,43 @@ else {
 
         //bindings..
         for (var sBinding in oItem.mBindingInfos) {
+            var oBindingInfo = oItem.getBindingInfo(sBinding);
             var oBinding = oItem.getBinding(sBinding);
+            if (!oBindingInfo) {
+                continue;
+            }
+
+            //not really perfect for composite bindings (what we are doing here) - we are just returning the first for that..
+            //in case of a real use case --> enhance
+            var oRelevantPart = oBindingInfo;
+            if (oBindingInfo.parts && oBindingInfo.parts.length > 0 ) {
+                oRelevantPart = oBindingInfo.parts[0];
+            }
+
             if (oBinding) {
                 oReturn.binding[sBinding] = {
+                    model: oRelevantPart.model,
                     path: oBinding.sPath && oBinding.getPath(),
-                    "static": oBinding.oModel && oBinding.getModel() instanceof sap.ui.model.resource.ResourceModel,
-                    parts: oItem.mBindingInfos[sBinding].parts
+                    static: oBinding.oModel && oBinding.getModel() instanceof sap.ui.model.resource.ResourceModel
                 };
             } else {
-                var oBindingInfo = oItem.getBindingInfo(sBinding);
-                if (!oBindingInfo) {
-                    continue;
-                }
-                if (oBindingInfo.path) {
-                    debugger
-                    oReturn.binding[sBinding] = {
-                        path: oBindingInfo.path,
-                        "static": true,
-                        parts: oItem.mBindingInfos[sBinding].parts
-
-                    };
-                } else if (oBindingInfo.parts && oBindingInfo.parts.length > 0) {
+                oReturn.binding[sBinding] = {
+                    path: oBindingInfo.path,
+                    model: oRelevantPart.model,
+                    static: true
+                };
+                /*if (oBindingInfo.parts && oBindingInfo.parts.length > 0) {
                     for (var i = 0; i < oBindingInfo.parts.length; i++) {
                         if (!oBindingInfo.parts[i].path) {
                             continue;
                         }
                         if (!oReturn.binding[sBinding]) {
-                            debugger
-                            oReturn.binding[sBinding] = { 
-                                path: oBindingInfo.parts[i].path, 
-                                "static": true, 
-                                parts: oItem.mBindingInfos[sBinding].parts };
+                            oReturn.binding[sBinding] = { path: oBindingInfo.parts[i].path, "static": true };
                         } else {
-                            debugger
                             oReturn.binding[sBinding].path += ";" + oBindingInfo.parts[i].path;
                         }
                     }
-                }
+                }*/
             }
         }
 

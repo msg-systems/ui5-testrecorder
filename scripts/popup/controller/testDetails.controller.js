@@ -259,6 +259,10 @@ sap.ui.define([
             this._oModel.setProperty("/codeSettings/testCategory", oData.title);
             this._oModel.setProperty("/codeSettings/testUrl", oData.url);
             RecordController.startRecording(bImmediate);
+            if ( bImmediate === true ) {
+                this._oRecordDialog.close();
+            }
+            
             this.getRouter().navTo("testDetails", {
                 TestId: this.getModel("navModel").getProperty("/test/uuid")
             });
@@ -342,17 +346,12 @@ sap.ui.define([
                 this.getModel("navModel").setProperty("/test", oSave.test);
                 this._updatePreview();
             }.bind(this));
-        } else if (this.getModel("recordModel").getProperty("/recording") === true) {
+        } else if (this.getModel("recordModel").getProperty("/recording") === true && this._bQuickMode === false) {
             setTimeout(function () {
                 this._oRecordDialog.open();
             }.bind(this), 100);
         }
         this._updatePreview();
-    };
-
-    TestDetails.prototype.onShowActionSettings = function (oEvent) {
-        this._createActionPopover();
-        this._oPopoverAction.openBy(oEvent.getSource());
     };
 
     TestDetails.prototype._initMessagePopover = function () {
@@ -410,7 +409,9 @@ sap.ui.define([
 
     TestDetails.prototype.onEditStep = function (oEvent) {
         //set the current step on not activate..
-        this.getModel("navModel").setProperty("/elements/" + this._iCurrentStep + "/stepExecuted", false)
+        var iNumber = oEvent.getSource().getBindingContext("navModel").getPath().split("/");
+        this._iCurrentStep = parseInt(iNumber[iNumber.length - 1],10);
+        this.getModel("navModel").setProperty("/elements/" + this._iCurrentStep + "/stepExecuted", false);
         this.getRouter().navTo("elementDisplay", {
             TestId: this.getModel("navModel").getProperty("/test/uuid"),
             ElementId: this._iCurrentStep
