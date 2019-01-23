@@ -9,7 +9,9 @@ sap.ui.define([
     "com/ui5/testing/model/GlobalSettings",
     "com/ui5/testing/model/ExportImport",
     "com/ui5/testing/model/CodeHelper",
-    "sap/m/MessageToast"
+    "sap/m/MessageToast",
+    "com/ui5/testing/libs/jszip.min",
+    "com/ui5/testing/libs/FileSaver.min"
 ], function (Controller, JSONModel, MessagePopover, MessageItem, Navigation, Communication, RecordController, GlobalSettings, ExportImport, CodeHelper, MessageToast) {
     "use strict";
 
@@ -39,7 +41,8 @@ sap.ui.define([
                     { key: "PRS", text: "Press" },
                     { key: "TYP", text: "Type Text" }
                 ]
-            }
+            },
+            tabSegment: 'settings'
         }),
         _bActive: false,
         _iGlobal: 0,
@@ -445,6 +448,28 @@ sap.ui.define([
 
         element.click();
         document.body.removeChild(element);
+    };
+
+    TestDetails.prototype.onTabChange = function(oEvent) {
+        this._oModel.setProperty('/tabSegment', oEvent.getSource().getSelectedKey());
+    };
+
+    TestDetails.prototype.downloadAll = function(oEvent) {
+        var zip = new JSZip();
+        //take all sources containing code no free text
+        var aSources = this.getView()
+                        .byId('codeTab')
+                        .getItems()
+                        .filter(f => f.getContent().filter(c => c instanceof sap.m.FormattedText)[0].getVisible() === false)
+                        .map(t => ({ fileName: t.getText().indexOf('.js') > -1 ? t.getText().replace(/\-/g, '_') : t.getText().replace(/\-/g, '_') + '.js',
+                                     source: t.getContent()
+                                        .filter(c => c instanceof sap.ui.codeeditor.CodeEditor)[0].getValue()
+                                   }))
+                        .forEach(c => zip.file(c.fileName, c.source))
+        zip.generateAsync({
+                type: "blob"
+            })
+           .then(content => saveAs(content, "testCode.zip"));
     };
 
     return TestDetails;
