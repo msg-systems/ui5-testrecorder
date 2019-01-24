@@ -909,6 +909,41 @@ else {
         this.onClick(oElement, false);
     };
 
+    TestHandler.prototype.__showFastInformation = function(event){
+        this.__popover = new sap.m.Popover();
+        var control = this._getControlFromDom(event.target);
+        var controlInformation = new sap.ui.model.json.JSONModel({});
+        controlInformation.setProperty('/controlClass', control.getMetadata()._sClassName);
+        controlInformation.setProperty('/controlId', control.getId());
+        var genIdPatt = new RegExp('__' + control.getMetadata()._sUIDToken + '[0-9]+');
+        if(genIdPatt.exec(control.getId())) {
+            controlInformation.setProperty('/generatedId', true);
+        } else {
+            controlInformation.setProperty('/generatedId', false);
+        }
+        var aPropertyMethods = [...new Set(control.getMetadata()._aAllPublicMethods.filter(m => m.startsWith('get')))];
+        var aValues = aPropertyMethods
+            .filter(m => typeof(control[m]) === 'function')
+            .map(b => ({property: b.replace('get', ''), value: control[b]()}))
+            .filter(o => Object.values(o)[0] !== null && typeof(Object.values(o)[0]) !== 'function' && typeof(Object.values(o)[0]) !== 'object'  && typeof(Object.values(o)[0]) !== 'undefined');
+
+        controlInformation.setProperty('/primitiveProperties', aValues);
+        this.__popover.setModel(controlInformation);
+
+        this.__popover.setContentHeight('500px');
+        this.__popover.setContentWidth('300px');
+        this.__popover.setPlacement(sap.m.PlacementType.Auto);
+        this.__popover.setTitle(controlInformation.getProperty('/controlClass'));
+
+        var vBox = new sap.m.VBox();
+        controlInformation.getProperty('/primitiveProperties')
+                            .forEach(el => vBox.addItem(new sap.m.ObjectAttribute({title: el.property, text: el.value})));
+
+        this.__popover.addContent(vBox);
+        this.__popover.openBy(control);
+        //debugger
+    };
+
     TestHandler.prototype.init = function () {
         $(document).ready(function () {
             var that = this;
@@ -928,12 +963,14 @@ else {
                 if (this._bActive === false) {
                     return;
                 }
+                //this.__showFastInformation(event);
                 $(event.target).addClass('HVRReveal');
             }.bind(this));
             $('*').mouseout(function (event) {
                 if (!that._oDialog || !that._oDialog.isOpen()) {
                     $(event.target).removeClass('HVRReveal');
                 }
+                //this.__popover.close();
             }.bind(this));
 
             //avoid closing any popups.. this is an extremly dirty hack

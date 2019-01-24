@@ -135,6 +135,11 @@ sap.ui.define([
         
         //from here starts the real testing
         for(var step in aTestSteps) {
+            var stepCode = this.createTestStep(aTestSteps[step]);
+            if(stepCode) {
+                aParts.push(stepCode);
+            }
+            /*
             switch(aTestSteps[step].property.type) {
                 case "ACT": 
                     aParts.push(this.__createActionStep(aTestSteps[step]) + '\n');
@@ -143,12 +148,30 @@ sap.ui.define([
                     aParts.push(this.__createExistStep(aTestSteps[step]) + '\n');
                     break;
                 default: continue;
-            }
+            }*/
         }
 
         aParts.push(Array(4).join(' ') + '});\n\n');
 
         this.__code.content.push(aParts.reduce((a,b) => a + b, ''));
+    };
+
+    OPA5CodeStrategy.prototype.createTestStep = function(oTestStep) {   
+            var viewName = oTestStep.item.viewProperty.localViewName;
+            var namespace = oTestStep.item.viewProperty.viewName.replace('.view.' + oTestStep.item.viewProperty.localViewName, '');
+             
+            if(!this.__pages[viewName]) {
+                this.__pages[viewName] = new PageBuilder(namespace, viewName);
+            }
+
+            switch(oTestStep.property.type) {
+                case "ACT": 
+                    return this.__createActionStep(oTestStep) + '\n';
+                case "ASS": 
+                    return this.__createExistStep(oTestStep) + '\n';
+                default: 
+                    return ;
+            }
     };
     
     OPA5CodeStrategy.prototype.__createActionStep = function(oStep) {
@@ -236,24 +259,27 @@ sap.ui.define([
         aParts.push('on' + oStep.item.viewProperty.localViewName);
         aParts.push('.iShouldSeeTheProperty({');
         var objectMatcher = {};
-        for(var id in oStep.attributeFilter) {
+        var aToken = [...oStep.attributeFilter, ...oStep.assertFilter];
+        for(var id in aToken) {
             //var statBindings = Object.keys(oStep.item.binding).filter(k => oStep.item.binding[k].static).map(i => ({attributeName: i, i18nLabel: oStep.item.binding[i].path}));
-            switch(oStep.attributeFilter[id].criteriaType) {
-                case 'ID': objectMatcher['ID'] = 'id: \"' + oStep.attributeFilter[id].criteriaValue + '\"'; break;
+            switch(aToken[id].criteriaType) {
+                case 'ID': objectMatcher['ID'] = 'id: \"' + aToken[id].criteriaValue + '\"'; break;
                 case 'ATTR':
-                    var value = this.__code.constants.filter(c => c.value === oStep.attributeFilter[id].criteriaValue.trim())[0].symbol;
+                    var value = this.__code.constants.filter(c => c.value === aToken[id].criteriaValue.trim())[0] ? 
+                                this.__code.constants.filter(c => c.value === aToken[id].criteriaValue.trim())[0].symbol :
+                                aToken[id].criteriaValue.trim()
                     objectMatcher['ATTR'] ? 
-                    objectMatcher['ATTR'].push('{' + oStep.attributeFilter[id].subCriteriaType + ': ' + value + '}') : 
-                    objectMatcher['ATTR'] = ['{' + oStep.attributeFilter[id].subCriteriaType + ': ' + value + '}'];
+                    objectMatcher['ATTR'].push('{' + aToken[id].subCriteriaType + ': ' + value + '}') : 
+                    objectMatcher['ATTR'] = ['{' + aToken[id].subCriteriaType + ': ' + value + '}'];
                     break;
                 case 'MTA': 
-                    objectMatcher['OBJ_CLASS'] = 'controlType: \"' + oStep.attributeFilter[id].criteriaValue + '\"';
+                    objectMatcher['OBJ_CLASS'] = 'controlType: \"' + aToken[id].criteriaValue + '\"';
                     break;
                 case 'BNDG':
-                    objectMatcher['BNDG'] = 'i18n: {property: \"' + oStep.attributeFilter[id].subCriteriaType + '\", path: \"' + oStep.attributeFilter[id].criteriaValue + '\"}';
+                    objectMatcher['BNDG'] = 'i18n: {property: \"' + aToken[id].subCriteriaType + '\", path: \"' + oStep.attributeFilter[id].criteriaValue + '\"}';
                     break;
                 default: 
-                    console.log('Found a unknown class: ' + oStep.attributeFilter[id].criteriaType);
+                    console.log('Found a unknown class: ' + aToken[id].criteriaType);
             }
         }   
 
@@ -264,6 +290,7 @@ sap.ui.define([
         }
 
         if(objectMatcher.ATTR) {
+            objectMatcher.ATTR = [...new Set(objectMatcher.ATTR)];
             aParts.push("attributes: [" + objectMatcher.ATTR.reduce((a,b) => a +', ' + b, '').substring(2) + "]");
         }
         aParts[aParts.length - 1] = aParts[aParts.length -1].replace(/,\s*$/, '');

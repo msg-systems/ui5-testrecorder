@@ -352,6 +352,7 @@ sap.ui.define([
     };
 
     CodeHelper.prototype._getOPACodeFromItem = function (oElement) {
+        /*
         var sCode = "";
         var aCode = [];
 
@@ -417,8 +418,9 @@ sap.ui.define([
                 aCode = [sCode];
             }
         }
-
-        return aCode;
+        */
+        return [new OPA5CodeStrategy().createTestStep(oElement)];
+//        return aCode;
     };
 
     CodeHelper.prototype._testCafeGetCode = function (aElements) {
