@@ -1,4 +1,4 @@
-<mvc:View controllerName="com.ui5.testing.controller.testOverview" 
+<mvc:View
     xmlns="sap.m" 
     xmlns:l="sap.ui.layout" 
     xmlns:mvc="sap.ui.core.mvc" 
@@ -6,10 +6,19 @@
     xmlns:code="sap.ui.codeeditor" 
     xmlns:u="sap.ui.unified" 
     xmlns:semantic="sap.m.semantic" 
-    xmlns:core="sap.ui.core">
-    <semantic:FullscreenPage navButtonPress="onNavBack" showNavButton="true" title="Test Overview" busy="{viewModel>/busy}">
+    xmlns:core="sap.ui.core"
+	controllerName="com.ui5.testing.controller.testOverview">
+    <semantic:FullscreenPage 
+		navButtonPress="onNavBack" 
+		showNavButton="true" 
+		title="Test Overview" 
+		busy="{viewModel>/busy}">
         <semantic:content>
-            <Table fixedLayout="false" inset="false" items="{ path: 'viewModel>/items', sorter: { path: 'createdAt', descending: true  } }" noDataText="{i18n>notFoundTitle}">
+            <Table 
+				fixedLayout="false" 
+				inset="false" 
+				noDataText="{i18n>notFoundTitle}"
+				items="{ path: 'viewModel>/items', sorter: { path: 'createdAt', descending: true  } }">
                 <columns>
                     <Column>
                         <Text text="Test-Name" />
@@ -32,10 +41,9 @@
                 </items>
             </Table>
             <core:html content="&lt;input type='file' id='importOrigHelper' accept='.json' style='display:none'/&gt;"/>
-
-            </semantic:content>
-            <semantic:customFooterContent>
-                <Button id="beImport" text="Import" press="onImport"/>
-            </semantic:customFooterContent>
-        </semantic:FullscreenPage>
-    </mvc:View>
+		</semantic:content>
+		<semantic:customFooterContent>
+			<Button id="beImport" text="Import" press="onImport"/>
+		</semantic:customFooterContent>
+	</semantic:FullscreenPage>
+</mvc:View>

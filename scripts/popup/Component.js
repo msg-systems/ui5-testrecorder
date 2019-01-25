@@ -212,7 +212,10 @@ sap.ui.define([
                     "resources": {
                         "css": [
                             {
-                                "uri": "style.css"
+                                "uri": "css/style.css"
+                            },
+                            {
+                                "uri": "css/additional.css"
                             }
                         ]
                     }

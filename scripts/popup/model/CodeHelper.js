@@ -1,10 +1,11 @@
 sap.ui.define([
     "sap/ui/base/Object",
-    "sap/ui/model/json/JSONModel"
-], function (Object, JSONModel) {
+    "sap/ui/model/json/JSONModel",
+    "com/ui5/testing/model/OPA5CodeStrategy"
+], function (UI5Object, JSONModel, OPA5CodeStrategy) {
     "use strict";
 
-    var CodeHelper = Object.extend("com.ui5.testing.model.CodeHelper", {
+    var CodeHelper = UI5Object.extend("com.ui5.testing.model.CodeHelper", {
         constructor: function () {
             this._oModel = new JSONModel();
         }
@@ -15,7 +16,7 @@ sap.ui.define([
 
         this._oModel.setProperty("/codeSettings", oCodeSettings);
         if (oCodeSettings.language === "OPA") {
-            return this._opaGetCode(aElements);;
+            return this._opaGetCode(oCodeSettings, aElements);;
         } else if (oCodeSettings.language === "TCF") {
             return this._testCafeGetCode(aElements);
         } else if (oCodeSettings.language === "UI5") {
@@ -424,6 +425,7 @@ sap.ui.define([
     };
 
     CodeHelper.prototype._getOPACodeFromItem = function (oElement) {
+        /*
         var sCode = "";
         var aCode = [];
 
@@ -489,8 +491,9 @@ sap.ui.define([
                 aCode = [sCode];
             }
         }
-
-        return aCode;
+        */
+        return [new OPA5CodeStrategy().createTestStep(oElement)];
+//        return aCode;
     };
 
     CodeHelper.prototype._testCafeGetCode = function (aElements) {
@@ -656,7 +659,6 @@ sap.ui.define([
         }
     };
 
-
     CodeHelper.prototype._groupCodeByCluster = function (aElements) {
         var aCluster = [[]];
         var bNextIsBreak = false;
@@ -679,101 +681,8 @@ sap.ui.define([
         return aCluster;
     }
 
-    CodeHelper.prototype._opaGetCode = function (aElements) {
-        var aCodes = [];
-        var bSupportAssistant = this._oModel.getProperty("/codeSettings/supportAssistant");
-
-        //for testcafe we are returning: (1) installation instructions..
-        var oCodeInstall = {
-            codeName: "Usage",
-            type: "FTXT",
-            order: 2,
-            code: "<h3>t.b.d.</h3>"
-        }
-        aCodes.push(oCodeInstall);
-
-        //(2) execute script
-        var oCodeTest = {
-            codeName: "Test",
-            type: "CODE",
-            order: 1
-        };
-        var sCode = "";
-        var oCodeSettings = this._oModel.getProperty("/codeSettings");
-
-        sCode = 'sap.ui.define([\n';
-        sCode += '    "sap/ui/test/opaQunit"\n';
-        sCode += '], function (opaTest) {\n';
-        sCode += '    "use strict";\n\n';
-        sCode += '    QUnit.module("' + oCodeSettings.testCategory + '");\n\n';
-
-        //group elements by assertions (Given, When, Then)
-        var aCluster = this._groupCodeByCluster(aElements);
-        var oPage = this._getFirstComponent(aElements);
-        var sFirstComponent = oPage.component;
-        var sFirstPage = oPage.page;
-
-        sCode += '    opaTest("Initialize the Application", function (Given, When, Then) {\n';
-        sCode += '        Given.onThe' + sFirstPage + 'Page.iInitializeMockServer().iStartMockServer().\n        iStartTheApp("' + sFirstComponent + '", { hash: "' + aElements[0].hash + '" });\n\n';
-        sCode += '        When.onThe' + sFirstPage + 'Page.iLookAtTheScreen();\n\n';
-        sCode += '        Then.onThe' + sFirstPage + 'Page.theViewShouldBeVisible();\n';
-        sCode += '    });\n\n'
-
-        //make the rest of the OPA calls..
-        for (var i = 0; i < aCluster.length; i++) {
-            var aLines = [];
-            sCode += "    opaTest('Test " + i + "', function (Given, When, Then) {\n";
-            for (var j = 0; j < aCluster[i].length; j++) {
-                var oElement = aCluster[i][j];
-
-                if (oElement.property.type !== "SUP") {
-                    aLines = this._getOPACodeFromItem(oElement);
-                }
-
-                for (var x = 0; x < aLines.length; x++) {
-                    sCode += "        " + aLines[x] + "\n";
-                }
-            }
-
-            sCode += "    });\n";
-        }
-
-        sCode += "});";
-        oCodeTest.code = sCode;
-        aCodes.push(oCodeTest);
-
-        //create a code per view..
-        for (var sPage in aCluster) {
-            var oPage = aCluster[sPage];
-            sCode = "sap.ui.define([\n";
-            sCode += '  "sap/ui/test/Opa5",\n';
-            sCode += '  "com/ui5/testing/PageBase"\n';
-            sCode += '], function (Opa5, Common) {\n';
-            sCode += '   "use strict";\n';
-            sCode += '   Opa5.createPageObjects({\n';
-            sCode += '      onThe' + sPage + 'Page: {\n';
-            sCode += '         baseClass: Common,\n';
-            sCode += '         viewName: "' + sPage + '",\n';
-            sCode += '         actions: {},\n';
-            sCode += '         assertions: {}\n';
-            sCode += '      }\n';
-            sCode += '   });\n';
-            sCode += '});';
-            aCodes.push({
-                codeName: "Page Code (" + sPage + ")",
-                code: sCode,
-                type: "CODE",
-                order: 2
-            });
-        }
-
-        aCodes = aCodes.sort(function (aObj, bObj) {
-            if (aObj.order <= bObj.order) {
-                return -1;
-            }
-            return 1;
-        });
-        return aCodes;
+    CodeHelper.prototype._opaGetCode = function (oCodeSettings, aElements) {
+        return new OPA5CodeStrategy().generate(oCodeSettings, aElements, this);
     };
 
     return new CodeHelper();

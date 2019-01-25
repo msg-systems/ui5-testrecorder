@@ -1,8 +1,8 @@
 sap.ui.define([
     "sap/ui/base/Object"
-], function (Object) {
+], function (UI5Object) {
 
-    var HugeStorageSync = Object.extend("com.ui5.testing.model.HugeStorageSync", {
+    var HugeStorageSync = UI5Object.extend("com.ui5.testing.model.HugeStorageSync", {
     });
 
     function getCacheKey(key, i) {

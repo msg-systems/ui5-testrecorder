@@ -1,5 +1,10 @@
-<mvc:View controllerName="com.ui5.testing.controller.App" 
-    xmlns:mvc="sap.ui.core.mvc" displayBlock="true" busy="false" class="sapUiSizeCompact" busyIndicatorDelay="{appView>/delay}" 
-    xmlns="sap.m">
+<mvc:View
+	xmlns:mvc="sap.ui.core.mvc"
+	xmlns="sap.m"
+	displayBlock="true"
+	busy="false"
+	busyIndicatorDelay="{appView>/delay}" 
+	class="sapUiSizeCompact"
+	controllerName="com.ui5.testing.controller.App">
     <App id="idAppControl" />
 </mvc:View>

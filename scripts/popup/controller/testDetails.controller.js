@@ -9,7 +9,9 @@ sap.ui.define([
     "com/ui5/testing/model/GlobalSettings",
     "com/ui5/testing/model/ExportImport",
     "com/ui5/testing/model/CodeHelper",
-    "sap/m/MessageToast"
+    "sap/m/MessageToast",
+    "com/ui5/testing/libs/jszip.min",
+    "com/ui5/testing/libs/FileSaver.min"
 ], function (Controller, JSONModel, MessagePopover, MessageItem, Navigation, Communication, RecordController, GlobalSettings, ExportImport, CodeHelper, MessageToast) {
     "use strict";
 
@@ -39,7 +41,8 @@ sap.ui.define([
                     { key: "PRS", text: "Press" },
                     { key: "TYP", text: "Type Text" }
                 ]
-            }
+            },
+            tabSegment: 'settings'
         }),
         _bActive: false,
         _iGlobal: 0,
@@ -58,7 +61,9 @@ sap.ui.define([
             this.getOwnerComponent().getRouter().getRoute("testDetailsCreate").attachPatternMatched(this._onTestCreate, this);
             this.getOwnerComponent().getRouter().getRoute("testDetailsCreateQuick").attachPatternMatched(this._onTestCreateQuick, this);
             this.getOwnerComponent().getRouter().getRoute("testReplay").attachPatternMatched(this._onTestReplay, this);
-            sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
+            
+			//Why is this function subscribed?
+			//sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this); 
         },
     });
 
@@ -174,7 +179,7 @@ sap.ui.define([
 
     TestDetails.prototype._createDialog = function () {
         this._oRecordDialog = sap.ui.xmlfragment(
-            "com.ui5.testing.view.RecordDialog",
+            "com.ui5.testing.fragment.RecordDialog",
             this
         );
         this._oRecordDialog.setModel(this._oModel, "viewModel");
@@ -429,6 +434,43 @@ sap.ui.define([
 
     TestDetails.prototype._lengthStatusFormatter = function (iLength) {
         return "Success";
+    };
+
+    TestDetails.prototype.downloadSource = function(oEvent) {
+        var sSourceCode = oEvent.getSource().getParent().getContent().filter(c => c instanceof sap.ui.codeeditor.CodeEditor)[0].getValue();
+        var element = document.createElement('a');
+        element.setAttribute('href', 'data:text/javascript;charset=utf-8,'+encodeURIComponent(sSourceCode));
+        var fileName = oEvent.getSource().getParent().getText().replace(/\-/g, '_');
+        fileName = fileName.indexOf('.js') > -1 ? fileName : fileName + '.js';
+        element.setAttribute('download', fileName);
+
+        element.style.display = 'none';
+        document.body.appendChild(element);
+
+        element.click();
+        document.body.removeChild(element);
+    };
+
+    TestDetails.prototype.onTabChange = function(oEvent) {
+        this._oModel.setProperty('/tabSegment', oEvent.getSource().getSelectedKey());
+    };
+
+    TestDetails.prototype.downloadAll = function(oEvent) {
+        var zip = new JSZip();
+        //take all sources containing code no free text
+        var aSources = this.getView()
+                        .byId('codeTab')
+                        .getItems()
+                        .filter(f => f.getContent().filter(c => c instanceof sap.m.FormattedText)[0].getVisible() === false)
+                        .map(t => ({ fileName: t.getText().indexOf('.js') > -1 ? t.getText().replace(/\-/g, '_') : t.getText().replace(/\-/g, '_') + '.js',
+                                     source: t.getContent()
+                                        .filter(c => c instanceof sap.ui.codeeditor.CodeEditor)[0].getValue()
+                                   }))
+                        .forEach(c => zip.file(c.fileName, c.source))
+        zip.generateAsync({
+                type: "blob"
+            })
+           .then(content => saveAs(content, "testCode.zip"));
     };
 
     return TestDetails;
