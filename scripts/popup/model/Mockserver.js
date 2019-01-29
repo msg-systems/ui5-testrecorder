@@ -45,7 +45,7 @@ sap.ui.define([
             this._oViewModel = new JSONModel({ components: [] });
             this._oServiceUrls = {};
             this._oSearchDialog = sap.ui.xmlfragment(
-                "com.ui5.testing.view.SelectComponent",
+                "com.ui5.testing.fragment.SelectComponent",
                 this
             );
             this._oSearchDialog.setModel(this._oViewModel, "viewModel");
@@ -260,7 +260,7 @@ sap.ui.define([
                                     }
                                 }
 
-                                //try to identify if we are parent, or if we are child 
+                                //try to identify if we are parent, or if we are child
                                 //for one --> one relation ships that is not always 100% clear
                                 var bToParent = sMultiplictyPartner === "1" && (sMultiplicityOwn === "0..1" || sMultiplicityOwn === "*" );
 
