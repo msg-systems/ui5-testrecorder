@@ -609,7 +609,7 @@ sap.ui.define([
                 this._checkElementNumber();
                 this._resumePerformanceBindings();
 
-                var sLanguage = this._oModel.getProperty("/codeSettings/language");
+                var sLanguage = this.getView().byId('tstLanguage').getSelectedKey();
                 this.getModel("viewModel").setProperty("/code", CodeHelper.getItemCode(sLanguage, oElementFinal).join("\n"));
             }.bind(this));
         }.bind(this));

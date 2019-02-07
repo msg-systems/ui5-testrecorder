@@ -189,6 +189,51 @@ sap.ui.define([
         }
     };
 
+    OPA5CodeStrategy.prototype.__flattenProperties = function(aObjects) {
+        var tempArray = [];
+        if(typeof aObjects === 'object') { 
+            if(!Array.isArray(aObjects)) {
+                if(Object.keys(aObjects).length == 1) {
+                    tempArray = [aObjects];
+                } else {
+                    for(var key in aObjects) {
+                        tempArray = [...tempArray, ...this.__flattenProperties(aObjects[key])];
+                    }
+                }
+            } else {
+                for(var i = 0; i < aObjects.length; i++) {
+                    tempArray = [...tempArray, ...this.__flattenProperties(aObjects[i])];
+                }
+            }
+       }
+	   return tempArray;
+    };
+    
+    OPA5CodeStrategy.prototype.__createSelectorProperties = function(aSelectors) {
+        var endObject = {};
+        for(var key in aSelectors) {
+            switch(key) {
+                case 'id': 
+                    endObject[key] = {value: aSelectors[key].id, isRegex: aSelectors[key].__isRegex};
+                    break;
+                case 'properties':
+
+                    var newProperties = this.__flattenProperties(aSelectors[key].reduce( 
+                        function(obj, item) {
+                                obj[Object.keys(item)[0]] = Object.values(item)[0]; 
+                                return obj;
+                        }, {}));
+                    newProperties = this.__flattenProperties(newProperties);
+                    endObject['attributes']  ?  endObject['attributes'] = [...endObject['attributes'],...newProperties ] : 
+                                                endObject['attributes'] = newProperties;
+                    break;    
+                default:
+                    endObject[key] = aSelectors[key];
+            }
+        }
+        return JSON.stringify(endObject);
+    };
+
     OPA5CodeStrategy.prototype.__createEnterTextAction = function(oStep) {
         var selectors = oStep.selector.selectorUI5.own;
         var actionInsert = oStep.property.selectActInsert;
@@ -199,6 +244,7 @@ sap.ui.define([
 
         var aParts = [Array(8).join(' ') + 'When.'];
         aParts.push('on' + viewName);
+        /*
         aParts.push('.enterText({');
         var attributes = [];
         var singleProperties = [];
@@ -218,7 +264,14 @@ sap.ui.define([
         
         aParts.push(', actionText: "' + actionInsert + '"');
 
-        aParts.push('});')
+        aParts.push('});')*/
+        aParts.push('.enterText(');
+        
+        var aSelectorParts = this.__createSelectorProperties(selectors);
+
+        aParts.push(aSelectorParts);
+        aParts.push(');');
+        
         return aParts.reduce((a,b) => a + b, '');
     };
 
@@ -232,23 +285,12 @@ sap.ui.define([
 
         var aParts = [Array(8).join(' ') + 'When.'];
         aParts.push('on' + viewName);
-        aParts.push('.press({');
-        var attributes = [];
-        var singleProperties = [];
-        for(var key in selectors) {
-            switch(key) {
-                case 'id': 
-                    singleProperties.push('id: {value: ' + selectors[key].id + ', isRegex: ' + selectors[key].__isRegex + '}');
-                    break;
-                default:
-                    attributes.push(key + ': "' + selectors[key] + '"');
-            }
-        }
-        var attText = attributes.reduce((a,b)=> a + ', ' + b, '');
-        attText = attText.length > 2 ? attText.substring(2) : attText;
-        aParts.push('attributes: [' + attText + ']');
-        aParts.push(singleProperties.reduce((a,b)=> a + ', ' + b, ''));
-        aParts.push('});')
+        aParts.push('.press(');
+        
+        var aSelectorParts = this.__createSelectorProperties(selectors);
+
+        aParts.push(aSelectorParts);
+        aParts.push(');');
         return aParts.reduce((a,b) => a + b, '');
 
     };
@@ -265,12 +307,7 @@ sap.ui.define([
             switch(aToken[id].criteriaType) {
                 case 'ID': objectMatcher['ID'] = 'id: \"' + aToken[id].criteriaValue + '\"'; break;
                 case 'ATTR':
-                    var value = this.__code.constants.filter(c => c.value === aToken[id].criteriaValue.trim())[0] ? 
-                                this.__code.constants.filter(c => c.value === aToken[id].criteriaValue.trim())[0].symbol :
-                                aToken[id].criteriaValue.trim()
-                    objectMatcher['ATTR'] ? 
-                    objectMatcher['ATTR'].push('{' + aToken[id].subCriteriaType + ': ' + value + '}') : 
-                    objectMatcher['ATTR'] = ['{' + aToken[id].subCriteriaType + ': ' + value + '}'];
+                    this.__createAttrValue(aToken[id], objectMatcher);
                     break;
                 case 'MTA': 
                     objectMatcher['OBJ_CLASS'] = 'controlType: \"' + aToken[id].criteriaValue + '\"';
@@ -298,6 +335,23 @@ sap.ui.define([
         aParts.push('});')
 
         return aParts.reduce((a,b) => a + b, '');
+    };
+
+    OPA5CodeStrategy.prototype.__createAttrValue = function(oToken, objectMatcher) {
+        var value = this.__code.constants.filter(c => c.value === oToken.criteriaValue.trim())[0] ? 
+                    this.__code.constants.filter(c => c.value === oToken.criteriaValue.trim())[0].symbol :
+                    this.__sanatize(oToken.criteriaValue.trim());
+
+        if(typeof value === 'object') {
+            console.log('stringify object')
+        }            
+        objectMatcher['ATTR'] ? 
+        objectMatcher['ATTR'].push('{' + oToken.subCriteriaType + ': ' + value + '}') : 
+        objectMatcher['ATTR'] = ['{' + oToken.subCriteriaType + ': ' + value + '}'];
+    };
+
+    OPA5CodeStrategy.prototype.__sanatize = function(sString) {
+          return '"' + sString + '"';
     };
 
     OPA5CodeStrategy.prototype.__generateCommonPage = function() {
