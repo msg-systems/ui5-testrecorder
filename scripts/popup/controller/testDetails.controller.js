@@ -31,16 +31,7 @@ sap.ui.define([
                 attrType: []
             },
             statics: {
-                supportRules: [],
-                type: [
-                    { key: "ACT", text: "Action" },
-                    { key: "ASS", text: "Assert" },
-                    { key: "SUP", text: "Support Assistant" }
-                ],
-                action: [
-                    { key: "PRS", text: "Press" },
-                    { key: "TYP", text: "Type Text" }
-                ]
+                supportRules: []
             },
             tabSegment: 'settings'
         }),
@@ -55,15 +46,14 @@ sap.ui.define([
             this.getView().setModel(this._oModel, "viewModel");
             this.getView().setModel(RecordController.getModel(), "recordModel");
             this.getView().setModel(Navigation.getModel(), "navModel");
-            this.getView().setModel(GlobalSettings.getModel(), "settingsModel");
             this._createDialog();
             this.getOwnerComponent().getRouter().getRoute("testDetails").attachPatternMatched(this._onTestDisplay, this);
             this.getOwnerComponent().getRouter().getRoute("testDetailsCreate").attachPatternMatched(this._onTestCreate, this);
             this.getOwnerComponent().getRouter().getRoute("testDetailsCreateQuick").attachPatternMatched(this._onTestCreateQuick, this);
             this.getOwnerComponent().getRouter().getRoute("testReplay").attachPatternMatched(this._onTestReplay, this);
-            
+
 			//Why is this function subscribed?
-			//sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this); 
+			//sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
         },
     });
 
@@ -262,7 +252,7 @@ sap.ui.define([
             if ( bImmediate === true ) {
                 this._oRecordDialog.close();
             }
-            
+
             this.getRouter().navTo("testDetails", {
                 TestId: this.getModel("navModel").getProperty("/test/uuid")
             });
