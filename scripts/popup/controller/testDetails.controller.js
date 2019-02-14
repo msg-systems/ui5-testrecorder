@@ -240,7 +240,7 @@ sap.ui.define([
             uuid: this.uuidv4(),
             createdAt: new Date().getTime()
         });
-        this._oModel.setProperty("/codeSettings/language", this.getModel("settingsModel").getProperty("/settings/defaultLanguage"));
+        this._oModel.setProperty("/codeSettings/language", this.getModel("settings").getProperty("/settings/defaultLanguage"));
         Communication.fireEvent("getwindowinfo").then(function (oData) {
             if (!oData) {
                 return;

@@ -1542,21 +1542,23 @@ sap.ui.define([
             var sSelectType = oElement.property.selectItemBy; //DOM | UI5 | ATTR
             var sExpectedCount = this._oModel.getProperty("/element/property/assKeyMatchingCount");
             this._getFoundElements().then(function (aFound) {
-                if (oItem.identifier.idGenerated == true && sSelectType === "UI5") {
-                    aMessages.push({
-                        type: "Error",
-                        title: "ID generated",
-                        subtitle: "Used identifer is cloned (not static)",
-                        description: "You are probably using a cloned ID which will be unstable.\nPlease provide a static id if possible, or use attribute Selectors."
-                    });
-                } else if (oItem.identifier.idCloned === true && sSelectType === "UI5") {
-                    iGrade = 2;
-                    aMessages.push({
-                        type: "Error",
-                        title: "ID generated",
-                        subtitle: "Used identifer is generated (not static)",
-                        description: "You are probably using a cloned ID which will be unstable.\nPlease provide a static id if possible, or use attribute Selectors."
-                    });
+                if(oItem.identifier) {
+                    if (oItem.identifier.idGenerated == true && sSelectType === "UI5") {
+                        aMessages.push({
+                            type: "Error",
+                            title: "ID generated",
+                            subtitle: "Used identifer is cloned (not static)",
+                            description: "You are probably using a cloned ID which will be unstable.\nPlease provide a static id if possible, or use attribute Selectors."
+                        });
+                    } else if (oItem.identifier.idCloned === true && sSelectType === "UI5") {
+                        iGrade = 2;
+                        aMessages.push({
+                            type: "Error",
+                            title: "ID generated",
+                            subtitle: "Used identifer is generated (not static)",
+                            description: "You are probably using a cloned ID which will be unstable.\nPlease provide a static id if possible, or use attribute Selectors."
+                        });
+                    }
                 }
                 if (aFound.length === 0 && (sType === "ACT" || (sAssType === "EXS" && sType === "ASS"))) {
                     iGrade = 1;
