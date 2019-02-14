@@ -1,5 +1,6 @@
 sap.ui.define([
-], function(){
+    "sap/m/MessageToast"
+], function(MessageToast){
     var ChromeStorage = {
         set: function(oSettings) {
             const requestKey = oSettings.key;

@@ -43,8 +43,8 @@ sap.ui.define([
         },
 
         _importDone: function (oData) {
-            ChromeStorage.save(oData).then(function() {
-                this._loadData();
+            ChromeStorage.saveRecord(oData).then(function() {
+                //this._loadData();
             }.bind(this));
         },
 
