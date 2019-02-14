@@ -3,10 +3,14 @@ sap.ui.define([
     "com/ui5/testing/model/Communication",
     "com/ui5/testing/model/RecordController",
     "com/ui5/testing/model/Navigation",
-    "com/ui5/testing/model/ExportImport",
     "sap/ui/model/json/JSONModel",
     "com/ui5/testing/model/ChromeStorage"
-], function (BaseController, Communication, RecordController, Navigation, ExportImport, JSONModel, ChromeStorage) {
+], function (BaseController,
+             Communication,
+             RecordController,
+             Navigation,
+             JSONModel,
+             ChromeStorage) {
     "use strict";
 
     return BaseController.extend("com.ui5.testing.controller.Overview", {
@@ -39,7 +43,7 @@ sap.ui.define([
         },
 
         _importDone: function (oData) {
-            ExportImport.save(oData).then(function() {
+            ChromeStorage.save(oData).then(function() {
                 this._loadData();
             }.bind(this));
         },

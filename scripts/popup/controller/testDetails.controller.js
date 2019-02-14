@@ -7,12 +7,20 @@ sap.ui.define([
     "com/ui5/testing/model/Communication",
     "com/ui5/testing/model/RecordController",
     "com/ui5/testing/model/GlobalSettings",
-    "com/ui5/testing/model/ExportImport",
     "com/ui5/testing/model/CodeHelper",
-    "sap/m/MessageToast",
+    "com/ui5/testing/model/ChromeStorage",
     "com/ui5/testing/libs/jszip.min",
     "com/ui5/testing/libs/FileSaver.min"
-], function (Controller, JSONModel, MessagePopover, MessageItem, Navigation, Communication, RecordController, GlobalSettings, ExportImport, CodeHelper, MessageToast) {
+], function (Controller,
+             JSONModel,
+             MessagePopover,
+             MessageItem,
+             Navigation,
+             Communication,
+             RecordController,
+             GlobalSettings,
+             CodeHelper,
+             ChromeStorage) {
     "use strict";
 
     var TestDetails = Controller.extend("com.ui5.testing.controller.TestDetails", {
@@ -187,7 +195,7 @@ sap.ui.define([
             elements: this.getModel("navModel").getProperty("/elements"),
             test: this.getModel("navModel").getProperty("/test")
         };
-        ExportImport.save(oSave);
+        ChromeStorage.saveRecord(oSave);
     };
 
     TestDetails.prototype.onDelete = function (oEvent) {
@@ -363,7 +371,6 @@ sap.ui.define([
         var aElements = this.getModel("navModel").getProperty("/elements");
         aElements.splice(sNumber, 1);
         this.getModel("navModel").setProperty("/elements", aElements);
-
         this._updatePlayButton();
     };
 
