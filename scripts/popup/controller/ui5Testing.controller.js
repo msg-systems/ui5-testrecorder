@@ -71,43 +71,6 @@ sap.ui.define([
             },
             statics: {
                 supportRules: [],
-                type: [
-                    { key: "ACT", text: "Action" },
-                    { key: "ASS", text: "Assert" },
-                    { key: "SUP", text: "Support Assistant" }
-                ],
-                action: [
-                    { key: "PRS", text: "Press" },
-                    { key: "TYP", text: "Type Text" }
-                ],
-                assertType: [
-                    { key: "ATTR", text: "Attributes" },
-                    { key: "EXS", text: "Exists" },
-                    { key: "MTC", text: "Matching Count" },
-                ],
-                selType: [
-                    { key: "UI5", text: "UI5-Identifier" },
-                    { key: "ATTR", text: "Combination of Attributes" }
-                ],
-                attrType: [
-                    { key: "OWN", text: "Own Element" },
-                    { key: "VIW", text: "View" },
-                    { key: "PRT", text: "Parent-Element (L1)" },
-                    { key: "PRT2", text: "Parent-Element (L2)" },
-                    { key: "PRT3", text: "Parent-Element (L3)" },
-                    { key: "PRT4", text: "Parent-Element (L4)" },
-                    { key: "PLBL", text: "Label Element" },
-                    { key: "MCMB", text: "Item-Data" },
-                    { key: "AGR", text: "Aggregation" },
-                    { key: "PEL", text: "Previous Element" },
-                    { key: "NEL", text: "Next Element" }
-                ],
-                operator: [
-                    { key: "EQ", text: "Equal" },
-                    { key: "NE", text: "Not Equal" },
-                    { key: "CP", text: "Contains" },
-                    { key: "NP", text: "Not Contains" }
-                ]
             },
             selectMode: true, //are we within selection or within code check
             completeCode: "",
@@ -176,6 +139,10 @@ sap.ui.define([
         this._updateSubActionTypes(false);
         this._adjustDomChildWith(this._oModel.getProperty("/element/item"));
         this._updatePreview();
+
+        this._oModel.setProperty("/element/item", oItem);
+        this._oModel.setProperty("/element/attributeFilter", []);
+        this._oModel.setProperty("/element/assertFilter", []);
     };
 
     TestHandler.prototype._recordStopped = function () {
@@ -537,7 +504,7 @@ sap.ui.define([
             sDomChildWith = aRows.length >= 0 ? aRows[0].domChildWith : "";
             this._oModel.setProperty("/element/property/domChildWith", sDomChildWith);
         }
-        //we now have a valid value - check if there is any preferred value for the currently selected 
+        //we now have a valid value - check if there is any preferred value for the currently selected
         this._oModel.setProperty("/element/subActionTypes", aRows);
     };
 
@@ -976,7 +943,7 @@ sap.ui.define([
 
     TestHandler.prototype._setValidAttributeTypes = function (oItem) {
         var oItem = this._oModel.getProperty("/element/item");
-        var aTypes = this._oModel.getProperty("/statics/attrType");
+        var aTypes = this.getModel('constants').getProperty("/attrType");
         var aAcceptable = [];
         for (var i = 0; i < aTypes.length; i++) {
             if (this._attributeTypes[aTypes[i].key]) {
@@ -1003,7 +970,7 @@ sap.ui.define([
                     domChildWith: "", action: oClass.defaultAction
                 }];
             }
-            
+
             oReturn.preferredType = typeof oClass.preferredType !== "undefined" ? oClass.preferredType : oReturn.preferredType;
             oReturn.defaultEnter = typeof oClass.defaultEnter !== "undefined" ? oClass.defaultEnter : null;
             oReturn.defaultBlur = typeof oClass.defaultBlur !== "undefined" ? oClass.defaultBlur : null;
@@ -1095,7 +1062,7 @@ sap.ui.define([
                 sName = oItem.label.binding.text.path + sName;
             }
             sName = sName.substr(0, 1).toLowerCase() + sName.substr( 1 );
-            
+
             this._oModel.setProperty("/element/property/technicalName", sName);
 
             this._getFoundElements().then(function (aReturn) {
