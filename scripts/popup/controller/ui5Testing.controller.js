@@ -95,7 +95,7 @@ sap.ui.define([
             this.getRouter().getRoute("elementCreate").attachPatternMatched(this._onObjectMatched, this);
             this.getRouter().getRoute("elementCreateQuick").attachPatternMatched(this._onObjectMatchedQuick, this);
             this.getRouter().getRoute("elementDisplay").attachPatternMatched(this._onObjectMatchedInReplay, this);
-            sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
+            //sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
         }
     });
 
@@ -143,8 +143,9 @@ sap.ui.define([
         this._oModel.setProperty("/element/assertFilter", []);
     };
 
+    /*
     TestHandler.prototype._recordStopped = function () {
-    };
+    };*/
 
     TestHandler.prototype.onShowActionSettings = function (oEvent) {
         this._createActionPopover();
@@ -388,6 +389,7 @@ sap.ui.define([
             });
         });
     };
+
     TestHandler.prototype._onCancelStep = function () {
         if (this._bReplayMode === true) {
             this.getRouter().navTo("testReplay", {
@@ -680,7 +682,6 @@ sap.ui.define([
         this._oMessagePopoverAssert.toggle(oEvent.getSource());
     };
 
-
     TestHandler.prototype.onChangeCriteriaValue = function (oEvent) {
         //reformat to have the correct data type..
         var oAttributeCtx = oEvent.getSource().getBindingContext("viewModel");
@@ -715,7 +716,7 @@ sap.ui.define([
     };
 
     TestHandler.prototype._runSupportAssistantForSelElement = function () {
-        this._runSupportAssistant(); //todo
+        this._runSupportAssistant(); //TODO
     };
 
     TestHandler.prototype._runSupportAssistant = function () {
@@ -814,6 +815,7 @@ sap.ui.define([
             selectorUI5: oSelectorUI5
         };
     };
+
     TestHandler.prototype._getValueSpec = function (oLine, oItem) {
         var aCriteriaSettings = this._criteriaTypes[oLine.criteriaType].criteriaSpec(oItem);
         for (var j = 0; j < aCriteriaSettings.length; j++) {
@@ -896,13 +898,14 @@ sap.ui.define([
         this.byId("idAttributeTable").getBinding("items").suspend();
         this.byId("idAssertionTable").getBinding("items").suspend();
         this.byId("tblIdentifiedElements").getBinding("items").suspend();
-    }
+    };
+
     TestHandler.prototype._resumePerformanceBindings = function () {
         this.byId("idAttributeTable").getBinding("items").resume();
         this.byId("idAssertionTable").getBinding("items").resume();
         this.byId("tblIdentifiedElements").getBinding("items").resume();
         this.byId("attrObjectStatus").getBinding("text").refresh(true);
-    }
+    };
 
     TestHandler.prototype._getPropertiesInArray = function (oObj) {
         var i = 0;
@@ -1175,7 +1178,8 @@ sap.ui.define([
             oItem.defaultInteraction = oMerged.defaultInteraction;
         }
         return oItem;
-    }
+    };
+
     TestHandler.prototype._adjustPreferredAccess = function (oItem) {
         this._adjustPreferredAccessItem(oItem);
         this._adjustPreferredAccessItem(oItem.parent);
@@ -1184,7 +1188,7 @@ sap.ui.define([
         this._adjustPreferredAccessItem(oItem.parentL4);
         this._adjustPreferredAccessItem(oItem.label);
         this._adjustPreferredAccessItem(oItem.itemdata);
-    }
+    };
 
     TestHandler.prototype._adjustDomChildWith = function (oItem) {
         var oMerged = this._getMergedClassArray(oItem);
@@ -1378,11 +1382,13 @@ sap.ui.define([
         this._updateAttributeTypes(oCtx);
         this._updatePreview();
     };
+
     TestHandler.prototype.onCriteriaTypeChanged = function (oEvent) {
         var oCtx = oEvent.getSource().getBindingContext("viewModel");
         this._updateCriteriaType(oCtx);
         this._updatePreview();
     };
+
     TestHandler.prototype.onSubCriteriaTypeChanged = function (oEvent) {
         var oCtx = oEvent.getSource().getBindingContext("viewModel");
         this._updateSubCriteriaType(oCtx);
@@ -1469,7 +1475,6 @@ sap.ui.define([
         }
         this.onClick(oElement, false);
     };
-
 
     TestHandler.prototype._updateAttributeTypes = function (oCtx) {
         var oAttribute = this._oModel.getProperty(oCtx.getPath());
@@ -1731,7 +1736,6 @@ sap.ui.define([
     TestHandler.prototype._lengthStatusFormatter = function (iLength) {
         return "Success";
     };
-
 
     TestHandler.prototype._getCriteriaTypes = function () {
         this._criteriaTypes = GlobalSettings.getCriteriaTypes();
