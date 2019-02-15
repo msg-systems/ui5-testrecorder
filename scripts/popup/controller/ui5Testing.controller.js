@@ -71,43 +71,6 @@ sap.ui.define([
             },
             statics: {
                 supportRules: [],
-                type: [
-                    { key: "ACT", text: "Action" },
-                    { key: "ASS", text: "Assert" },
-                    { key: "SUP", text: "Support Assistant" }
-                ],
-                action: [
-                    { key: "PRS", text: "Press" },
-                    { key: "TYP", text: "Type Text" }
-                ],
-                assertType: [
-                    { key: "ATTR", text: "Attributes" },
-                    { key: "EXS", text: "Exists" },
-                    { key: "MTC", text: "Matching Count" },
-                ],
-                selType: [
-                    { key: "UI5", text: "UI5-Identifier" },
-                    { key: "ATTR", text: "Combination of Attributes" }
-                ],
-                attrType: [
-                    { key: "OWN", text: "Own Element" },
-                    { key: "VIW", text: "View" },
-                    { key: "PRT", text: "Parent-Element (L1)" },
-                    { key: "PRT2", text: "Parent-Element (L2)" },
-                    { key: "PRT3", text: "Parent-Element (L3)" },
-                    { key: "PRT4", text: "Parent-Element (L4)" },
-                    { key: "PLBL", text: "Label Element" },
-                    { key: "MCMB", text: "Item-Data" },
-                    { key: "AGR", text: "Aggregation" },
-                    { key: "PEL", text: "Previous Element" },
-                    { key: "NEL", text: "Next Element" }
-                ],
-                operator: [
-                    { key: "EQ", text: "Equal" },
-                    { key: "NE", text: "Not Equal" },
-                    { key: "CP", text: "Contains" },
-                    { key: "NP", text: "Not Contains" }
-                ]
             },
             selectMode: true, //are we within selection or within code check
             completeCode: "",
@@ -127,14 +90,12 @@ sap.ui.define([
             this._getCriteriaTypes();
             this._initMessagePopover();
             this.getView().setModel(this._oModel, "viewModel");
-            this.getView().setModel(GlobalSettings.getModel(), "settingsModel");
+            this.getView().setModel(Navigation.getModel(), "navModel");
+
             this.getRouter().getRoute("elementCreate").attachPatternMatched(this._onObjectMatched, this);
             this.getRouter().getRoute("elementCreateQuick").attachPatternMatched(this._onObjectMatchedQuick, this);
             this.getRouter().getRoute("elementDisplay").attachPatternMatched(this._onObjectMatchedInReplay, this);
-
-            this.getView().setModel(RecordController.getModel(), "recordModel");
-            this.getView().setModel(Navigation.getModel(), "navModel");
-            sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
+            //sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
         }
     });
 
@@ -176,10 +137,15 @@ sap.ui.define([
         this._updateSubActionTypes(false);
         this._adjustDomChildWith(this._oModel.getProperty("/element/item"));
         this._updatePreview();
+
+        this._oModel.setProperty("/element/item", oItem);
+        this._oModel.setProperty("/element/attributeFilter", []);
+        this._oModel.setProperty("/element/assertFilter", []);
     };
 
+    /*
     TestHandler.prototype._recordStopped = function () {
-    };
+    };*/
 
     TestHandler.prototype.onShowActionSettings = function (oEvent) {
         this._createActionPopover();
@@ -423,6 +389,7 @@ sap.ui.define([
             });
         });
     };
+
     TestHandler.prototype._onCancelStep = function () {
         if (this._bReplayMode === true) {
             this.getRouter().navTo("testReplay", {
@@ -537,7 +504,7 @@ sap.ui.define([
             sDomChildWith = aRows.length >= 0 ? aRows[0].domChildWith : "";
             this._oModel.setProperty("/element/property/domChildWith", sDomChildWith);
         }
-        //we now have a valid value - check if there is any preferred value for the currently selected 
+        //we now have a valid value - check if there is any preferred value for the currently selected
         this._oModel.setProperty("/element/subActionTypes", aRows);
     };
 
@@ -715,7 +682,6 @@ sap.ui.define([
         this._oMessagePopoverAssert.toggle(oEvent.getSource());
     };
 
-
     TestHandler.prototype.onChangeCriteriaValue = function (oEvent) {
         //reformat to have the correct data type..
         var oAttributeCtx = oEvent.getSource().getBindingContext("viewModel");
@@ -750,7 +716,7 @@ sap.ui.define([
     };
 
     TestHandler.prototype._runSupportAssistantForSelElement = function () {
-        this._runSupportAssistant(); //todo
+        this._runSupportAssistant(); //TODO
     };
 
     TestHandler.prototype._runSupportAssistant = function () {
@@ -849,6 +815,7 @@ sap.ui.define([
             selectorUI5: oSelectorUI5
         };
     };
+
     TestHandler.prototype._getValueSpec = function (oLine, oItem) {
         var aCriteriaSettings = this._criteriaTypes[oLine.criteriaType].criteriaSpec(oItem);
         for (var j = 0; j < aCriteriaSettings.length; j++) {
@@ -931,13 +898,14 @@ sap.ui.define([
         this.byId("idAttributeTable").getBinding("items").suspend();
         this.byId("idAssertionTable").getBinding("items").suspend();
         this.byId("tblIdentifiedElements").getBinding("items").suspend();
-    }
+    };
+
     TestHandler.prototype._resumePerformanceBindings = function () {
         this.byId("idAttributeTable").getBinding("items").resume();
         this.byId("idAssertionTable").getBinding("items").resume();
         this.byId("tblIdentifiedElements").getBinding("items").resume();
         this.byId("attrObjectStatus").getBinding("text").refresh(true);
-    }
+    };
 
     TestHandler.prototype._getPropertiesInArray = function (oObj) {
         var i = 0;
@@ -976,7 +944,7 @@ sap.ui.define([
 
     TestHandler.prototype._setValidAttributeTypes = function (oItem) {
         var oItem = this._oModel.getProperty("/element/item");
-        var aTypes = this._oModel.getProperty("/statics/attrType");
+        var aTypes = this.getModel('constants').getProperty("/attrType");
         var aAcceptable = [];
         for (var i = 0; i < aTypes.length; i++) {
             if (this._attributeTypes[aTypes[i].key]) {
@@ -1003,7 +971,7 @@ sap.ui.define([
                     domChildWith: "", action: oClass.defaultAction
                 }];
             }
-            
+
             oReturn.preferredType = typeof oClass.preferredType !== "undefined" ? oClass.preferredType : oReturn.preferredType;
             oReturn.defaultEnter = typeof oClass.defaultEnter !== "undefined" ? oClass.defaultEnter : null;
             oReturn.defaultBlur = typeof oClass.defaultBlur !== "undefined" ? oClass.defaultBlur : null;
@@ -1095,7 +1063,7 @@ sap.ui.define([
                 sName = oItem.label.binding.text.path + sName;
             }
             sName = sName.substr(0, 1).toLowerCase() + sName.substr( 1 );
-            
+
             this._oModel.setProperty("/element/property/technicalName", sName);
 
             this._getFoundElements().then(function (aReturn) {
@@ -1210,7 +1178,8 @@ sap.ui.define([
             oItem.defaultInteraction = oMerged.defaultInteraction;
         }
         return oItem;
-    }
+    };
+
     TestHandler.prototype._adjustPreferredAccess = function (oItem) {
         this._adjustPreferredAccessItem(oItem);
         this._adjustPreferredAccessItem(oItem.parent);
@@ -1219,7 +1188,7 @@ sap.ui.define([
         this._adjustPreferredAccessItem(oItem.parentL4);
         this._adjustPreferredAccessItem(oItem.label);
         this._adjustPreferredAccessItem(oItem.itemdata);
-    }
+    };
 
     TestHandler.prototype._adjustDomChildWith = function (oItem) {
         var oMerged = this._getMergedClassArray(oItem);
@@ -1413,11 +1382,13 @@ sap.ui.define([
         this._updateAttributeTypes(oCtx);
         this._updatePreview();
     };
+
     TestHandler.prototype.onCriteriaTypeChanged = function (oEvent) {
         var oCtx = oEvent.getSource().getBindingContext("viewModel");
         this._updateCriteriaType(oCtx);
         this._updatePreview();
     };
+
     TestHandler.prototype.onSubCriteriaTypeChanged = function (oEvent) {
         var oCtx = oEvent.getSource().getBindingContext("viewModel");
         this._updateSubCriteriaType(oCtx);
@@ -1505,7 +1476,6 @@ sap.ui.define([
         this.onClick(oElement, false);
     };
 
-
     TestHandler.prototype._updateAttributeTypes = function (oCtx) {
         var oAttribute = this._oModel.getProperty(oCtx.getPath());
         var oAttributeSettings = this._attributeTypes[oAttribute.attributeType];
@@ -1575,21 +1545,23 @@ sap.ui.define([
             var sSelectType = oElement.property.selectItemBy; //DOM | UI5 | ATTR
             var sExpectedCount = this._oModel.getProperty("/element/property/assKeyMatchingCount");
             this._getFoundElements().then(function (aFound) {
-                if (oItem.identifier.idGenerated == true && sSelectType === "UI5") {
-                    aMessages.push({
-                        type: "Error",
-                        title: "ID generated",
-                        subtitle: "Used identifer is cloned (not static)",
-                        description: "You are probably using a cloned ID which will be unstable.\nPlease provide a static id if possible, or use attribute Selectors."
-                    });
-                } else if (oItem.identifier.idCloned === true && sSelectType === "UI5") {
-                    iGrade = 2;
-                    aMessages.push({
-                        type: "Error",
-                        title: "ID generated",
-                        subtitle: "Used identifer is generated (not static)",
-                        description: "You are probably using a cloned ID which will be unstable.\nPlease provide a static id if possible, or use attribute Selectors."
-                    });
+                if(oItem.identifier) {
+                    if (oItem.identifier.idGenerated == true && sSelectType === "UI5") {
+                        aMessages.push({
+                            type: "Error",
+                            title: "ID generated",
+                            subtitle: "Used identifer is cloned (not static)",
+                            description: "You are probably using a cloned ID which will be unstable.\nPlease provide a static id if possible, or use attribute Selectors."
+                        });
+                    } else if (oItem.identifier.idCloned === true && sSelectType === "UI5") {
+                        iGrade = 2;
+                        aMessages.push({
+                            type: "Error",
+                            title: "ID generated",
+                            subtitle: "Used identifer is generated (not static)",
+                            description: "You are probably using a cloned ID which will be unstable.\nPlease provide a static id if possible, or use attribute Selectors."
+                        });
+                    }
                 }
                 if (aFound.length === 0 && (sType === "ACT" || (sAssType === "EXS" && sType === "ASS"))) {
                     iGrade = 1;
@@ -1764,7 +1736,6 @@ sap.ui.define([
     TestHandler.prototype._lengthStatusFormatter = function (iLength) {
         return "Success";
     };
-
 
     TestHandler.prototype._getCriteriaTypes = function () {
         this._criteriaTypes = GlobalSettings.getCriteriaTypes();

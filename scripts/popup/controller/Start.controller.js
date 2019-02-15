@@ -12,11 +12,6 @@ sap.ui.define([
             this._oModel = this._createViewModel();
             this.getView().setModel(this._oModel,"viewModel");
             this.getView().setModel(RecordController.getModel(),"recordModel");
-            this._bRegistered = false;
-            this._oInitializedPromise = null;
-            this._oInitPromiseResolve = null;
-            this._oInitPromiseReject = null;
-            this._sTabId = "";
             RecordController.init(this.getOwnerComponent());
             this.getView().setModel(Navigation.getModel(), "navModel");
             this._getCurrentURL();
@@ -76,10 +71,6 @@ sap.ui.define([
 
         onOpenSettings: function () {
             this.getRouter().navTo("settings");
-        },
-
-        onStopRecord: function () {
-            RecordController.stopRecording();
         }
     });
 }
