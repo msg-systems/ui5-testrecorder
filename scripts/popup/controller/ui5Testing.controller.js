@@ -90,13 +90,11 @@ sap.ui.define([
             this._getCriteriaTypes();
             this._initMessagePopover();
             this.getView().setModel(this._oModel, "viewModel");
-            this.getView().setModel(GlobalSettings.getModel(), "settingsModel");
+            this.getView().setModel(Navigation.getModel(), "navModel");
+
             this.getRouter().getRoute("elementCreate").attachPatternMatched(this._onObjectMatched, this);
             this.getRouter().getRoute("elementCreateQuick").attachPatternMatched(this._onObjectMatchedQuick, this);
             this.getRouter().getRoute("elementDisplay").attachPatternMatched(this._onObjectMatchedInReplay, this);
-
-            this.getView().setModel(RecordController.getModel(), "recordModel");
-            this.getView().setModel(Navigation.getModel(), "navModel");
             sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
         }
     });

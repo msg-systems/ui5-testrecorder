@@ -19,7 +19,6 @@ sap.ui.define([
                 recording: false
             });
             this.getView().setModel(this._oModel, "viewModel");
-            this.getView().setModel(RecordController.getModel(), "recordModel");
             this.getRouter().getRoute("overview").attachPatternMatched(this._onObjectMatched, this);
         },
 
@@ -43,9 +42,10 @@ sap.ui.define([
         },
 
         _importDone: function (oData) {
-            ChromeStorage.saveRecord(oData).then(function() {
-                //this._loadData();
-            }.bind(this));
+            ChromeStorage.saveRecord(oData)
+                       /*.then(function() {
+                            //this._loadData();
+                       }.bind(this));*/
         },
 
         onImport : function() {

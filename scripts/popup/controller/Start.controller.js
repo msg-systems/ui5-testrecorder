@@ -71,10 +71,6 @@ sap.ui.define([
 
         onOpenSettings: function () {
             this.getRouter().navTo("settings");
-        },
-
-        onStopRecord: function () {
-            RecordController.stopRecording();
         }
     });
 }
