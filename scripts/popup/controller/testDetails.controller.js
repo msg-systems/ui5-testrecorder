@@ -7,12 +7,20 @@ sap.ui.define([
     "com/ui5/testing/model/Communication",
     "com/ui5/testing/model/RecordController",
     "com/ui5/testing/model/GlobalSettings",
-    "com/ui5/testing/model/ExportImport",
     "com/ui5/testing/model/CodeHelper",
-    "sap/m/MessageToast",
+    "com/ui5/testing/model/ChromeStorage",
     "com/ui5/testing/libs/jszip.min",
     "com/ui5/testing/libs/FileSaver.min"
-], function (Controller, JSONModel, MessagePopover, MessageItem, Navigation, Communication, RecordController, GlobalSettings, ExportImport, CodeHelper, MessageToast) {
+], function (Controller,
+             JSONModel,
+             MessagePopover,
+             MessageItem,
+             Navigation,
+             Communication,
+             RecordController,
+             GlobalSettings,
+             CodeHelper,
+             ChromeStorage) {
     "use strict";
 
     var TestDetails = Controller.extend("com.ui5.testing.controller.TestDetails", {
@@ -31,16 +39,7 @@ sap.ui.define([
                 attrType: []
             },
             statics: {
-                supportRules: [],
-                type: [
-                    { key: "ACT", text: "Action" },
-                    { key: "ASS", text: "Assert" },
-                    { key: "SUP", text: "Support Assistant" }
-                ],
-                action: [
-                    { key: "PRS", text: "Press" },
-                    { key: "TYP", text: "Type Text" }
-                ]
+                supportRules: []
             },
             tabSegment: 'settings'
         }),
@@ -55,15 +54,14 @@ sap.ui.define([
             this.getView().setModel(this._oModel, "viewModel");
             this.getView().setModel(RecordController.getModel(), "recordModel");
             this.getView().setModel(Navigation.getModel(), "navModel");
-            this.getView().setModel(GlobalSettings.getModel(), "settingsModel");
             this._createDialog();
             this.getOwnerComponent().getRouter().getRoute("testDetails").attachPatternMatched(this._onTestDisplay, this);
             this.getOwnerComponent().getRouter().getRoute("testDetailsCreate").attachPatternMatched(this._onTestCreate, this);
             this.getOwnerComponent().getRouter().getRoute("testDetailsCreateQuick").attachPatternMatched(this._onTestCreateQuick, this);
             this.getOwnerComponent().getRouter().getRoute("testReplay").attachPatternMatched(this._onTestReplay, this);
-            
+
 			//Why is this function subscribed?
-			//sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this); 
+			//sap.ui.getCore().getEventBus().subscribe("RecordController", "windowFocusLost", this._recordStopped, this);
         },
     });
 
@@ -129,7 +127,6 @@ sap.ui.define([
             });
         }.bind(this));
     };
-
 
     TestDetails.prototype._getFoundElements = function (oElement) {
         var oDefinition = oElement.selector;
@@ -197,12 +194,30 @@ sap.ui.define([
             elements: this.getModel("navModel").getProperty("/elements"),
             test: this.getModel("navModel").getProperty("/test")
         };
-        ExportImport.save(oSave);
+        ChromeStorage.saveRecord(oSave);
     };
 
     TestDetails.prototype.onDelete = function (oEvent) {
         var sId = this.getModel("navModel").getProperty("/test/uuid");
         var aExisting = [];
+        ChromeStorage.get({
+            key: "items",
+            success: function(items) {
+                if (items && items.items) {
+                    aExisting = items.items;
+                }
+                //check if we are already existing (do not add twice to the array..)
+                var iIndex = aExisting.indexOf(sId);
+                if (iIndex === -1) {
+                    return;
+                }
+                aExisting.splice(iIndex, 1);
+                ChromeStorage.set({key: "items", data: aExisting});
+                ChromeStorage.remove(sId);
+                this.getRouter().navTo("start");
+            }.bind(this)
+        });
+        /* Left until final test of current approach is working
         chrome.storage.local.get(["items"], function (items) {
             if (items && items.items) {
                 aExisting = items.items;
@@ -216,9 +231,8 @@ sap.ui.define([
             chrome.storage.local.set({ "items": aExisting });
             chrome.storage.local.remove(sId);
             this.getRouter().navTo("start");
-        }.bind(this));
+        }.bind(this));*/
     };
-
 
     TestDetails.prototype.onNavBack = function () {
         RecordController.stopRecording();
@@ -232,13 +246,11 @@ sap.ui.define([
     };
 
     TestDetails.prototype._onTestCreateQuick = function (oEvent) {
-        this._bCreateMode = true;
         this._bQuickMode = true;
         this._initTestCreate(true);
     };
 
     TestDetails.prototype._onTestCreate = function (oEvent) {
-        this._bCreateMode = true;
         this._bQuickMode = false;
         this._initTestCreate(false);
     };
@@ -250,7 +262,7 @@ sap.ui.define([
             uuid: this.uuidv4(),
             createdAt: new Date().getTime()
         });
-        this._oModel.setProperty("/codeSettings/language", this.getModel("settingsModel").getProperty("/settings/defaultLanguage"));
+        this._oModel.setProperty("/codeSettings/language", this.getModel("settings").getProperty("/settings/defaultLanguage"));
         Communication.fireEvent("getwindowinfo").then(function (oData) {
             if (!oData) {
                 return;
@@ -262,7 +274,7 @@ sap.ui.define([
             if ( bImmediate === true ) {
                 this._oRecordDialog.close();
             }
-            
+
             this.getRouter().navTo("testDetails", {
                 TestId: this.getModel("navModel").getProperty("/test/uuid")
             });
@@ -291,7 +303,6 @@ sap.ui.define([
     };
 
     TestDetails.prototype._onTestReplay = function (oEvent) {
-        this._bCreateMode = false;
         var sTargetUUID = oEvent.getParameter("arguments").TestId;
         var sCurrentUUID = this.getModel("navModel").getProperty("/test/uuid");
         if (sTargetUUID == this._oTestId && this._oModel.getProperty("/replayMode") === true) {
@@ -306,6 +317,24 @@ sap.ui.define([
         this._iCurrentStep = 0;
         if (sCurrentUUID !== sTargetUUID) {
             //we have to read the current data..
+            ChromeStorage.get({
+                key: sTargetUUID,
+                success: function(oSave) {
+                    if (!oSave[sTargetUUID]) {
+                        this.getRouter().navTo("start");
+                        return;
+                    }
+                    oSave = JSON.parse(oSave[sTargetUUID]);
+                    this._oModel.setProperty("/codeSettings", oSave.codeSettings);
+                    this.getModel("navModel").setProperty("/elements", oSave.elements);
+                    this.getModel("navModel").setProperty("/elementLength", oSave.elements.length);
+                    this.getModel("navModel").setProperty("/test", oSave.test);
+                    this._updatePreview();
+                    this._updatePlayButton();
+                    this._replay();
+                }.bind(this)
+            })
+            /*
             chrome.storage.local.get(sTargetUUID, function (oSave) {
                 if (!oSave[sTargetUUID]) {
                     this.getRouter().navTo("start");
@@ -319,7 +348,7 @@ sap.ui.define([
                 this._updatePreview();
                 this._updatePlayButton();
                 this._replay();
-            }.bind(this));
+            }.bind(this));*/
         } else {
             this._updatePreview();
             this._updatePlayButton();
@@ -328,12 +357,27 @@ sap.ui.define([
     };
 
     TestDetails.prototype._onTestDisplay = function (oEvent) {
-        this._bCreateMode = false;
         this._oModel.setProperty("/replayMode", false);
         var sTargetUUID = oEvent.getParameter("arguments").TestId;
         var sCurrentUUID = this.getModel("navModel").getProperty("/test/uuid");
         if (sCurrentUUID !== sTargetUUID) {
             //we have to read the current data..
+            ChromeStorage.get({
+                key: sTargetUUID,
+                success: function(oSave) {
+                    if (!oSave[sTargetUUID]) {
+                        this.getRouter().navTo("start");
+                        return;
+                    }
+                    oSave = JSON.parse(oSave[sTargetUUID]);
+                    this._oModel.setProperty("/codeSettings", oSave.codeSettings);
+                    this.getModel("navModel").setProperty("/elements", oSave.elements);
+                    this.getModel("navModel").setProperty("/elementLength", oSave.elements.length);
+                    this.getModel("navModel").setProperty("/test", oSave.test);
+                    this._updatePreview();
+                }.bind(this)
+            });
+            /*
             chrome.storage.local.get(sTargetUUID, function (oSave) {
                 if (!oSave[sTargetUUID]) {
                     this.getRouter().navTo("start");
@@ -345,7 +389,7 @@ sap.ui.define([
                 this.getModel("navModel").setProperty("/elementLength", oSave.elements.length);
                 this.getModel("navModel").setProperty("/test", oSave.test);
                 this._updatePreview();
-            }.bind(this));
+            }.bind(this));*/
         } else if (this.getModel("recordModel").getProperty("/recording") === true && this._bQuickMode === false) {
             setTimeout(function () {
                 this._oRecordDialog.open();
@@ -354,18 +398,15 @@ sap.ui.define([
         this._updatePreview();
     };
 
-    TestDetails.prototype._initMessagePopover = function () {
-    };
-
     TestDetails.prototype._updatePreview = function () {
         var aStoredItems = this.getModel("navModel").getProperty("/elements");
         this._oModel.setProperty("/codes", CodeHelper.getFullCode(this.getModel("viewModel").getProperty("/codeSettings"), aStoredItems));
     };
+
     TestDetails.prototype.onContinueRecording = function () {
         this._oRecordDialog.open();
         RecordController.startRecording();
     };
-
 
     TestDetails.prototype.onDeleteStep = function (oEvent) {
         var aItem = oEvent.getSource().getBindingContext("navModel").getPath().split("/");
@@ -373,7 +414,6 @@ sap.ui.define([
         var aElements = this.getModel("navModel").getProperty("/elements");
         aElements.splice(sNumber, 1);
         this.getModel("navModel").setProperty("/elements", aElements);
-
         this._updatePlayButton();
     };
 
@@ -430,7 +470,6 @@ sap.ui.define([
     TestDetails.prototype.showCode = function (sId) {
         this._bShowCodeOnly = true;
     };
-
 
     TestDetails.prototype._lengthStatusFormatter = function (iLength) {
         return "Success";

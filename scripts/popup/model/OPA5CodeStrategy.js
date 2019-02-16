@@ -6,8 +6,6 @@ sap.ui.define([
     var OPA5CodeStrategy = UI5Object.extend("com.ui5.testing.model.OPA5CodeStrategy", {
         constructor: function () {
             this.__pages = {};
-            this.__testSteps = {};
-            this.__namespace = "";
             this.__code = {
                 type: "CODE",
                 order: 1,
@@ -27,7 +25,7 @@ sap.ui.define([
             }))
             .reduce((a, b) => a.every(c => b.viewName !== c.viewName) ? a.concat(b) : a, [])
             .forEach(el => this.__pages[el.viewName] = (new PageBuilder(el.namespace, el.viewName)));
-        
+
         this.__namespace = this.__pages[Object.keys(this.__pages)[0]] ? this.__pages[Object.keys(this.__pages)[0]].getNamespace() : 'mock.namespace';
 
         //(2) execute script
@@ -62,7 +60,7 @@ sap.ui.define([
             }
             aCodes.push(oCode);
         }.bind(this));
-        
+
         aCodes.push({
             codeName: 'Common',
             type: 'CODE',
@@ -104,12 +102,12 @@ sap.ui.define([
 
     OPA5CodeStrategy.prototype.__createConstant = function(sString) {
         var constant = {value: sString};
-        constant.symbol = 'C_' + sString.replace(/(\s|\-|\.)+/g, '_').toUpperCase();
+        constant.symbol = 'C_' + sString.replace(/[\s\-\.\:\/]+/g, '_').toUpperCase();
         return constant;
     };
 
     OPA5CodeStrategy.prototype.__createAppStartStep = function(oAppDetails) {
-        var aParts = [Array(4).join(' ') + 'opaTest('];       
+        var aParts = [Array(4).join(' ') + 'opaTest('];
         aParts.push('"'+ oAppDetails.testName +' App Start"');
         aParts.push(', function(Given, When, Then) {\n');
         aParts.push(Array(8).join(' ') + 'Given.iStartTheAppByUrl({fullUrl: \"' + oAppDetails.testUrl + '\"});\n')
@@ -119,7 +117,7 @@ sap.ui.define([
     };
 
     OPA5CodeStrategy.prototype.__createAppCloseStep = function(oAppDetails) {
-        var aParts = [Array(4).join(' ') + 'opaTest('];       
+        var aParts = [Array(4).join(' ') + 'opaTest('];
         aParts.push('"'+ oAppDetails.testName +' App Teardown"');
         aParts.push(', function(Given, When, Then) {\n');
         aParts.push(Array(8).join(' ') + 'Given.iTeardownTheApp();\n')
@@ -129,26 +127,16 @@ sap.ui.define([
     };
 
     OPA5CodeStrategy.prototype.__createTestSteps = function(oAppDetails, aTestSteps) {
-        var aParts = [Array(4).join(' ') + 'opaTest('];       
+        var aParts = [Array(4).join(' ') + 'opaTest('];
         aParts.push('"'+ oAppDetails.testName +' Testing"');
         aParts.push(', function(Given, When, Then) {\n');
-        
+
         //from here starts the real testing
         for(var step in aTestSteps) {
             var stepCode = this.createTestStep(aTestSteps[step]);
             if(stepCode) {
                 aParts.push(stepCode);
             }
-            /*
-            switch(aTestSteps[step].property.type) {
-                case "ACT": 
-                    aParts.push(this.__createActionStep(aTestSteps[step]) + '\n');
-                    break;
-                case "ASS": 
-                    aParts.push(this.__createExistStep(aTestSteps[step]) + '\n');
-                    break;
-                default: continue;
-            }*/
         }
 
         aParts.push(Array(4).join(' ') + '});\n\n');
@@ -156,24 +144,24 @@ sap.ui.define([
         this.__code.content.push(aParts.reduce((a,b) => a + b, ''));
     };
 
-    OPA5CodeStrategy.prototype.createTestStep = function(oTestStep) {   
+    OPA5CodeStrategy.prototype.createTestStep = function(oTestStep) {
             var viewName = oTestStep.item.viewProperty.localViewName;
             var namespace = oTestStep.item.viewProperty.viewName.replace('.view.' + oTestStep.item.viewProperty.localViewName, '');
-             
+
             if(!this.__pages[viewName]) {
                 this.__pages[viewName] = new PageBuilder(namespace, viewName);
             }
 
             switch(oTestStep.property.type) {
-                case "ACT": 
+                case "ACT":
                     return this.__createActionStep(oTestStep) + '\n';
-                case "ASS": 
+                case "ASS":
                     return this.__createExistStep(oTestStep) + '\n';
-                default: 
+                default:
                     return ;
             }
     };
-    
+
     OPA5CodeStrategy.prototype.__createActionStep = function(oStep) {
         var actionsType = oStep.property.actKey;
         switch(actionsType) {
@@ -183,7 +171,7 @@ sap.ui.define([
             case 'PRS':
                 return this.__createPressAction(oStep);
                 break;
-            default: 
+            default:
                 console.log('Found a unknown action type: ' + actionsType);
                 return "";
         }
@@ -191,7 +179,7 @@ sap.ui.define([
 
     OPA5CodeStrategy.prototype.__flattenProperties = function(aObjects) {
         var tempArray = [];
-        if(typeof aObjects === 'object') { 
+        if(typeof aObjects === 'object') {
             if(!Array.isArray(aObjects)) {
                 if(Object.keys(aObjects).length == 1) {
                     tempArray = [aObjects];
@@ -208,25 +196,25 @@ sap.ui.define([
        }
 	   return tempArray;
     };
-    
+
     OPA5CodeStrategy.prototype.__createSelectorProperties = function(aSelectors) {
         var endObject = {};
         for(var key in aSelectors) {
             switch(key) {
-                case 'id': 
+                case 'id':
                     endObject[key] = {value: aSelectors[key].id, isRegex: aSelectors[key].__isRegex};
                     break;
                 case 'properties':
 
-                    var newProperties = this.__flattenProperties(aSelectors[key].reduce( 
+                    var newProperties = this.__flattenProperties(aSelectors[key].reduce(
                         function(obj, item) {
-                                obj[Object.keys(item)[0]] = Object.values(item)[0]; 
+                                obj[Object.keys(item)[0]] = Object.values(item)[0];
                                 return obj;
                         }, {}));
                     newProperties = this.__flattenProperties(newProperties);
-                    endObject['attributes']  ?  endObject['attributes'] = [...endObject['attributes'],...newProperties ] : 
+                    endObject['attributes']  ?  endObject['attributes'] = [...endObject['attributes'],...newProperties ] :
                                                 endObject['attributes'] = newProperties;
-                    break;    
+                    break;
                 default:
                     endObject[key] = aSelectors[key];
             }
@@ -244,34 +232,13 @@ sap.ui.define([
 
         var aParts = [Array(8).join(' ') + 'When.'];
         aParts.push('on' + viewName);
-        /*
-        aParts.push('.enterText({');
-        var attributes = [];
-        var singleProperties = [];
-        for(var key in selectors) {
-            switch(key) {
-                case 'id': 
-                    singleProperties.push('id: ' + selectors[key]);
-                    break;
-                default:
-                    attributes.push(key + ': "' + selectors[key] + '"');
-            }
-        }
-        var attText = attributes.reduce((a,b)=> a + ', ' + b, '');
-        attText = attText.length > 2 ? attText.substring(2) : attText;
-        aParts.push('attributes: [' + attText + ']');
-        aParts.push(singleProperties.reduce((a,b)=> a + ', ' + b, ''));
-        
-        aParts.push(', actionText: "' + actionInsert + '"');
-
-        aParts.push('});')*/
         aParts.push('.enterText(');
-        
+
         var aSelectorParts = this.__createSelectorProperties(selectors);
 
         aParts.push(aSelectorParts);
         aParts.push(');');
-        
+
         return aParts.reduce((a,b) => a + b, '');
     };
 
@@ -286,7 +253,7 @@ sap.ui.define([
         var aParts = [Array(8).join(' ') + 'When.'];
         aParts.push('on' + viewName);
         aParts.push('.press(');
-        
+
         var aSelectorParts = this.__createSelectorProperties(selectors);
 
         aParts.push(aSelectorParts);
@@ -295,8 +262,8 @@ sap.ui.define([
 
     };
 
-    OPA5CodeStrategy.prototype.__createExistStep = function(oStep) {   
-        this.__pages[oStep.item.viewProperty.localViewName].addExistFunction();     
+    OPA5CodeStrategy.prototype.__createExistStep = function(oStep) {
+        this.__pages[oStep.item.viewProperty.localViewName].addExistFunction();
         var aParts = [Array(8).join(' ') + 'Then.'];
         aParts.push('on' + oStep.item.viewProperty.localViewName);
         aParts.push('.iShouldSeeTheProperty({');
@@ -309,16 +276,16 @@ sap.ui.define([
                 case 'ATTR':
                     this.__createAttrValue(aToken[id], objectMatcher);
                     break;
-                case 'MTA': 
+                case 'MTA':
                     objectMatcher['OBJ_CLASS'] = 'controlType: \"' + aToken[id].criteriaValue + '\"';
                     break;
                 case 'BNDG':
                     objectMatcher['BNDG'] = 'i18n: {property: \"' + aToken[id].subCriteriaType + '\", path: \"' + oStep.attributeFilter[id].criteriaValue + '\"}';
                     break;
-                default: 
+                default:
                     console.log('Found a unknown class: ' + aToken[id].criteriaType);
             }
-        }   
+        }
 
         for(var k in objectMatcher) {
             if(k !== 'ATTR') {
@@ -338,15 +305,15 @@ sap.ui.define([
     };
 
     OPA5CodeStrategy.prototype.__createAttrValue = function(oToken, objectMatcher) {
-        var value = this.__code.constants.filter(c => c.value === oToken.criteriaValue.trim())[0] ? 
+        var value = this.__code.constants.filter(c => c.value === oToken.criteriaValue.trim())[0] ?
                     this.__code.constants.filter(c => c.value === oToken.criteriaValue.trim())[0].symbol :
                     this.__sanatize(oToken.criteriaValue.trim());
 
         if(typeof value === 'object') {
             console.log('stringify object')
-        }            
-        objectMatcher['ATTR'] ? 
-        objectMatcher['ATTR'].push('{' + oToken.subCriteriaType + ': ' + value + '}') : 
+        }
+        objectMatcher['ATTR'] ?
+        objectMatcher['ATTR'].push('{' + oToken.subCriteriaType + ': ' + value + '}') :
         objectMatcher['ATTR'] = ['{' + oToken.subCriteriaType + ': ' + value + '}'];
     };
 

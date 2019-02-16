@@ -5,10 +5,11 @@ sap.ui.define([
     "com/ui5/testing/model/GlobalSettings",
     "com/ui5/testing/model/Navigation",
     "com/ui5/testing/model/Mockserver",
+    "com/ui5/testing/model/ChromeStorage",
     "sap/ui/model/json/JSONModel",
     "sap/m/MessageToast",
     'sap/ui/model/Filter'
-], function (BaseController, Communication, RecordController, GlobalSettings, Navigation, Mockserver, JSONModel, MessageToast, Filter) {
+], function (BaseController, Communication, RecordController, GlobalSettings, Navigation, Mockserver, ChromeStorage, JSONModel, MessageToast, Filter) {
     "use strict";
 
     return BaseController.extend("com.ui5.testing.controller.Settings", {
@@ -51,7 +52,7 @@ sap.ui.define([
             );
             this._oFormulaDialog.setModel(this._oModel, "viewModel");
         },
-        
+
         onAfterRendering: function () {
             var that = this;
             document.getElementById("importOrigHelper2").addEventListener("change", function (e) {
@@ -238,7 +239,7 @@ sap.ui.define([
                 oEntitySetStored.genLogic = oEntitySet.genLogic;
                 oEntitySetStored.readLogic = oEntitySet.readLogic;
                 oEntitySetStored.readEntitySet = oEntitySet.readEntitySet;
-                
+
                 for (var sAttribute in oEntitySet.attributes) {
                     var aAttributes = oEntitySetStored.attributes.filter(function (e) { return e.name === sAttribute; });
                     if (!aAttributes.length) {
@@ -417,19 +418,39 @@ sap.ui.define([
 
             var oStore = {};
             oStore[this._getLocalStorageUrl()] = JSON.stringify(oResult);
+            ChromeStorage.set({
+                key: this._getLocalStorageUrl(),
+                data: JSON.stringify(oResult),
+                success: function(){
+                    MessageToast.show("Saved in local Storage");
+                }
+            })
+            /* left until refactoring is finished
             chrome.storage.local.set(oStore, function () {
                 MessageToast.show("Saved in local Storage");
-            });
+            });*/
         },
 
         _loadFromLocalStorage: function() {
+            var storageUrl = this._getLocalStorageUrl();
+            ChromeStorage.get({
+                key: storageUrl,
+                success: function(items) {
+                    if (!items[storageUrl]) {
+                        return;
+                    }
+
+                    this._importDone(JSON.parse(items[storageUrl]) );
+                }.bind(this)
+            });
+            /*
             chrome.storage.local.get([this._getLocalStorageUrl()], function (items) {
                 if (!items[this._getLocalStorageUrl()]) {
                     return;
                 }
 
                 this._importDone(JSON.parse(items[this._getLocalStorageUrl()]) );
-            }.bind(this));
+            }.bind(this));*/
         },
 
         _getExportResult: function() {
