@@ -8,6 +8,22 @@
     <semantic:FullscreenPage navButtonPress="onNavBack"
                              showNavButton="true"
                              title="Test {viewModel>/codeSettings/testName}">
+        <semantic:subHeader>
+            <Bar>
+                <contentRight>
+                    <Label text="Language"  visible="{= ${viewModel>/activeTab} === 'code' }"/>
+                    <Select id="tstLanguage"
+                            change="onUpdatePreview"
+                            items="{settings>/codeLanguages}"
+                            visible="{= ${viewModel>/activeTab} === 'code' }"
+                            selectedKey="{settings>/settings/defaultLanguage}">
+                        <items>
+                            <core:Item text="{settings>text}" key="{settings>key}"/>
+                        </items>
+                    </Select>
+                </contentRight>
+            </Bar>
+        </semantic:subHeader>
         <semantic:content>
             <IconTabBar id="idIconTabBarNoIcons"
                         select="onTabChange"
@@ -32,6 +48,7 @@
                                       columnsM="1"
                                       singleContainerFullSize="false">
                             <f:content>
+                                <!--
                                 <Label text="Language" required="true"/>
                                 <Select id="tstLanguage"
                                         change="onUpdatePreview"
@@ -41,7 +58,7 @@
                                         <core:Item text="{settings>text}" key="{settings>key}"/>
                                     </items>
                                 </Select>
-
+                                -->
                                 <Label required="true" text="Test-Category"/>
                                 <Input value="{viewModel>/codeSettings/testCategory}" change="onUpdatePreview"/>
 
