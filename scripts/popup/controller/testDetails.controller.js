@@ -41,7 +41,7 @@ sap.ui.define([
             statics: {
                 supportRules: []
             },
-            tabSegment: 'settings'
+            activeTab: 'settings'
         }),
         _bActive: false,
         _iGlobal: 0,

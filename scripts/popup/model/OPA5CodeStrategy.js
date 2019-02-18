@@ -96,8 +96,10 @@ sap.ui.define([
                 }
             }
         }.bind(this));
-        var constants = Array(4).join(' ') + 'var ' + this.__code.constants.map(c => Array(9).join(' ') + c.symbol + ' = \"' + c.value + '\"').reduce((a,b) => a + ',\n' + b, '').substring(2) + ';';
-        this.__code.content.push(constants.replace(/var\s{9}/g, 'var  '));
+        if(this.__code.constants.length > 0) {
+            var constants = Array(4).join(' ') + 'var ' + this.__code.constants.map(c => Array(9).join(' ') + c.symbol + ' = \"' + c.value + '\"').reduce((a, b) => a + ',\n' + b, '').substring(2) + ';';
+            this.__code.content.push(constants.replace(/var\s{9}/g, 'var  '));
+        }
     };
 
     OPA5CodeStrategy.prototype.__createConstant = function(sString) {
