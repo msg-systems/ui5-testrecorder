@@ -11,8 +11,16 @@ sap.ui.define([
                     defaultLanguage: "UI5"
                 },
                 settingsDefault: {
-                    defaultLanguage: "UI5"
+                    defaultLanguage: "UI5",
+                    defaultAuthentification: "NONE"
                 },
+                authentification: [{
+                    key: "NONE",
+                    text: "None"
+                }, {
+                    key: "FIORI",
+                    text: "Fiori Launchpad"
+                }],
                 codeLanguages: [
                     {
                         key: "UI5",
@@ -308,6 +316,7 @@ sap.ui.define([
                     var aReturn = [];
                     for (var i = 0; i < oMetadata.length; i++) {
                         var sElementName = oMetadata[i].elementName;
+                        /*
                         var oType = _oElementModelValues[sElementName];
                         
                         if (oType) {
@@ -352,7 +361,7 @@ sap.ui.define([
                                     });
                                 }
                             }
-                        }
+                        }*/
                     }
                     return aReturn;
                 }.bind(this)
@@ -589,7 +598,8 @@ sap.ui.define([
             },
             "sap.m.GenericTile": {
                 defaultAction: "PRS",
-                defaultAttributes: [{ attributeType: "PRT2", criteriaType: "ATTR", subCriteriaType: "target" }]
+                defaultAttributes: [{ attributeType: "PRT2", criteriaType: "ATTR", subCriteriaType: "target" },
+                    { attributeType: "PRT2", criteriaType: "MTA", subCriteriaType: "ELM" }]
             },
             "sap.m.MultiComboBox": {
                 defaultAction: "PRS",
