@@ -41,7 +41,7 @@ sap.ui.define([
             statics: {
                 supportRules: []
             },
-            tabSegment: 'settings'
+            activeTab: 'settings'
         }),
         _bActive: false,
         _iGlobal: 0,
@@ -321,11 +321,11 @@ sap.ui.define([
             ChromeStorage.get({
                 key: sTargetUUID,
                 success: function(oSave) {
-                    if (!oSave[sTargetUUID]) {
+                    if (!oSave) {
                         this.getRouter().navTo("start");
                         return;
                     }
-                    oSave = JSON.parse(oSave[sTargetUUID]);
+                    oSave = JSON.parse(oSave);
                     this._oModel.setProperty("/codeSettings", oSave.codeSettings);
                     this.getModel("navModel").setProperty("/elements", oSave.elements);
                     this.getModel("navModel").setProperty("/elementLength", oSave.elements.length);
@@ -366,11 +366,11 @@ sap.ui.define([
             ChromeStorage.get({
                 key: sTargetUUID,
                 success: function(oSave) {
-                    if (!oSave[sTargetUUID]) {
+                    if (!oSave) {
                         this.getRouter().navTo("start");
                         return;
                     }
-                    oSave = JSON.parse(oSave[sTargetUUID]);
+                    oSave = JSON.parse(oSave);
                     this._oModel.setProperty("/codeSettings", oSave.codeSettings);
                     this.getModel("navModel").setProperty("/elements", oSave.elements);
                     this.getModel("navModel").setProperty("/elementLength", oSave.elements.length);
@@ -401,7 +401,9 @@ sap.ui.define([
 
     TestDetails.prototype._updatePreview = function () {
         var aStoredItems = this.getModel("navModel").getProperty("/elements");
-        this._oModel.setProperty("/codes", CodeHelper.getFullCode(this.getModel("viewModel").getProperty("/codeSettings"), aStoredItems));
+        var codeSettings = this.getModel('viewModel').getProperty('/codeSettings');
+        codeSettings.language = this.getModel('settings').getProperty('/settings/defaultLanguage');
+        this._oModel.setProperty("/codes", CodeHelper.getFullCode(codeSettings, aStoredItems));
     };
 
     TestDetails.prototype.onContinueRecording = function () {
@@ -492,7 +494,7 @@ sap.ui.define([
     };
 
     TestDetails.prototype.onTabChange = function(oEvent) {
-        this._oModel.setProperty('/tabSegment', oEvent.getSource().getSelectedKey());
+        this._oModel.setProperty('/activeTab', oEvent.getSource().getSelectedKey());
     };
 
     TestDetails.prototype.downloadAll = function(oEvent) {

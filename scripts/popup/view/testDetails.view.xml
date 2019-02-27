@@ -8,6 +8,22 @@
     <semantic:FullscreenPage navButtonPress="onNavBack"
                              showNavButton="true"
                              title="Test {viewModel>/codeSettings/testName}">
+        <semantic:subHeader>
+            <Bar>
+                <contentRight>
+                    <Label text="Language"  visible="{= ${viewModel>/activeTab} === 'code' }"/>
+                    <Select id="tstLanguage"
+                            change="onUpdatePreview"
+                            items="{settings>/codeLanguages}"
+                            visible="{= ${viewModel>/activeTab} === 'code' }"
+                            selectedKey="{settings>/settings/defaultLanguage}">
+                        <items>
+                            <core:Item text="{settings>text}" key="{settings>key}"/>
+                        </items>
+                    </Select>
+                </contentRight>
+            </Bar>
+        </semantic:subHeader>
         <semantic:content>
             <IconTabBar id="idIconTabBarNoIcons"
                         select="onTabChange"
@@ -32,6 +48,7 @@
                                       columnsM="1"
                                       singleContainerFullSize="false">
                             <f:content>
+                                <!--
                                 <Label text="Language" required="true"/>
                                 <Select id="tstLanguage"
                                         change="onUpdatePreview"
@@ -41,7 +58,7 @@
                                         <core:Item text="{settings>text}" key="{settings>key}"/>
                                     </items>
                                 </Select>
-
+                                -->
                                 <Label required="true" text="Test-Category"/>
                                 <Input value="{viewModel>/codeSettings/testCategory}" change="onUpdatePreview"/>
 
@@ -66,16 +83,28 @@
                                         visible="false"
                                         selected="{viewModel>/codeSettings/supportAssistant}"
                                         select="onUpdatePreview"/>
-
+                                <!--
                                 <Label text="Replay" tooltip="Replay.."/>
                                 <Button icon="sap-icon://play" press="onReplayAll"/>
+                                -->
                             </f:content>
                         </f:SimpleForm>
 
                         <Panel expandable="true" expanded="true" width="auto">
                             <headerToolbar>
-                                <Toolbar press="onExpandControl" height="3rem" active="true" style="Clear">
-                                    <Title titleStyle="H5" text="Steps ( {= ${navModel>/elementLength} } )"/>
+                                <Toolbar press="onExpandControl"
+                                         height="3rem"
+                                         active="true"
+                                         style="Clear">
+                                    <Title titleStyle="H5"
+                                           text="Steps ( {= ${navModel>/elementLength} } )"/>
+                                    <ToolbarSpacer/>
+                                    <Label text="Replay"
+                                           tooltip="Replay.."
+                                           visible="false"/>
+                                    <Button icon="sap-icon://play"
+                                            text="{i18n>replay}"
+                                            press="onReplayAll"/>
                                 </Toolbar>
                             </headerToolbar>
                             <content>
@@ -195,36 +224,37 @@
                 icon="sap-icon://record"
                 text="Record"
                 press="onContinueRecording"
-                visible="{= ${viewModel>/tabSegment} === 'settings'}"/>
+                visible="{= ${viewModel>/activeTab} === 'settings'}"/>
             <Button
                 id="beExport"
                 text="Export"
+                icon="sap-icon://action"
                 press="onExport"
-                visible="{= ${viewModel>/tabSegment} === 'settings'}"/>
+                visible="{= ${viewModel>/activeTab} === 'settings'}"/>
             <Button
                 id="beDelete"
                 type="Reject"
                 text="Delete"
                 press="onDelete"
-                visible="{= ${viewModel>/tabSegment} === 'settings'}"/>
+                visible="{= ${viewModel>/activeTab} === 'settings'}"/>
             <Button
                 id="btCancel"
                 type="Emphasized"
                 text="Cancel"
                 press="onNavBack"
-                visible="{= ${viewModel>/tabSegment} === 'settings'}"/>
+                visible="{= ${viewModel>/activeTab} === 'settings'}"/>
             <Button
                 id="btSave"
                 type="Accept"
                 text="Save"
                 press="onSave"
-                visible="{= ${viewModel>/tabSegment} === 'settings'}"/>
+                visible="{= ${viewModel>/activeTab} === 'settings'}"/>
             <Button
                 id="btDownload"
                 icon="sap-icon://download-from-cloud"
                 text="Download Sources"
                 press="downloadAll"
-                visible="{= ${viewModel>/tabSegment} === 'code'}"/>
+                visible="{= ${viewModel>/activeTab} === 'code'}"/>
         </semantic:customFooterContent>
     </semantic:FullscreenPage>
 </mvc:View>
