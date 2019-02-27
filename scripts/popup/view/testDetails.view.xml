@@ -67,6 +67,13 @@
 
                                 <Label text="Test-Page"/>
                                 <Input value="{viewModel>/codeSettings/testUrl}" change="onUpdatePreview"/>
+                                
+                                <Label text="Authentification"/>
+                                <Select id="tstAuthentication" change="onUpdatePreview" items="{settings>/authentification}" selectedKey="{viewModel>/codeSettings/authentification}">
+                                    <items>
+                                        <core:Item text="{settings>text}" key="{settings>key}"/>
+                                    </items>
+                                </Select>
 
                                 <Label
                                         visible="false"

@@ -20,7 +20,7 @@ sap.ui.define([
         } else if (oCodeSettings.language === "TCF") {
             return this._testCafeGetCode(aElements);
         } else if (oCodeSettings.language === "UI5") {
-            return this._ui5GetCode(aElements);
+            return this._ui5GetCode(aElements, oCodeSettings);
         }
         return "";
     };
@@ -39,7 +39,7 @@ sap.ui.define([
         return [];
     };
 
-    CodeHelper.prototype._ui5GetCode = function (aElements) {
+    CodeHelper.prototype._ui5GetCode = function (aElements, oCodeSettings) {
         var aCodes = [];
         var bSupportAssistant = this._oModel.getProperty("/codeSettings/supportAssistant");
 
@@ -57,7 +57,7 @@ sap.ui.define([
                 "<h3>Create Test</h3>" +
                 "<p>Write a test.spec.js file, and copy over the code.</p>" +
                 "<h3>Running</h3>" +
-                "<p>Run via Command-Line via: <code>uiveri5</code><br/>" +
+                "<p>Run via Command-Line via: <code>uiveri5" + (oCodeSettings.authentification === 'FIORI' ? " --params.user=_USER_ --params.pass=_PASS_" : "" ) + "</code><br/>" +
                 "For all details, please see the official github repository <a href=\"https://github.com/SAP/ui5-uiveri5\" style=\"color:green; font-weight:600;\">ui5-uiveri5</a></p>"
         }
         aCodes.push(oCodeInstall);
@@ -72,6 +72,15 @@ sap.ui.define([
         var sCodeConf = "exports.config = {\n";
         sCodeConf += "  profile: 'integration',\n";
         sCodeConf += "  baseUrl: '" + oCodeSettings.testUrl + "'\n";
+        if (oCodeSettings.authentification === "FIORI" ) {
+            sCodeConf += ",\n";
+            sCodeConf += "  auth: {\n";
+            sCodeConf += "     'fiori-form': {\n";
+            sCodeConf += "        user: '${params.user}',\n";
+            sCodeConf += "        pass: '${params.pass}'\n";
+            sCodeConf += "     }\n";
+            sCodeConf += "  }\n";
+        }
         sCodeConf += "};";
         oCodeTest.code = sCodeConf;
         aCodes.push(oCodeTest);
@@ -102,8 +111,10 @@ sap.ui.define([
 
                 if (oElement.property.type !== "SUP") {
                     var oRes = this._getUI5CodeFromItem(oElement);
-                    aLinesDef.push(oRes.definitons);
-                    aLinesCode.push(oRes.code);
+                    if (oRes.definitons.length) {
+                        aLinesDef.push(oRes.definitons);
+                    }
+                    aLinesCode = aLinesCode.concat(oRes.code);
                 }
             }
             var aLines = aLinesDef.concat(aLinesCode);
@@ -292,8 +303,20 @@ sap.ui.define([
             oUI5Selector.own.interaction = oInteraction.interaction;
             bAddSuffix = true;
         } else {
-            if (oElement.defaultInteraction) {
-                oUI5Selector.own.interaction = "root";
+            if (oElement.item.defaultInteraction) {
+                oUI5Selector.own.interaction = oElement.item.defaultInteraction;
+            }
+            if (oUI5Selector.parent && oElement.item.parent.defaultInteraction ) {
+                oUI5Selector.parent.interaction = oElement.item.parent.defaultInteraction;
+            }
+            if (oUI5Selector.parentL2 && oElement.item.parentL2.defaultInteraction) {
+                oUI5Selector.parentL2.interaction = oElement.item.parentL2.defaultInteraction;
+            }
+            if (oUI5Selector.parentL3 && oElement.item.parentL3.defaultInteraction) {
+                oUI5Selector.parentL3.interaction = oElement.item.parentL3.defaultInteraction;
+            }
+            if (oUI5Selector.parentL4 && oElement.item.parentL4.defaultInteraction) {
+                oUI5Selector.parentL4.interaction = oElement.item.parentL4.defaultInteraction;
             }
         }
 
@@ -536,7 +559,7 @@ sap.ui.define([
             }
         }
 
-        sCode = 'import { UI5Selector ' + (bSupportAssistantNeeded ? ", utils " : "") + '} from "ui5-testcafe-selector";\n';
+        sCode = 'import { UI5Selector ' + (bSupportAssistantNeeded || oCodeSettings.authentification !== 'NONE' ? ", utils " : "") + '} from "ui5-testcafe-selector";\n';
         if (bSelectorNeeded === true) {
             sCode += 'import { Selector } from "testcafe";\n';
         }
@@ -547,6 +570,10 @@ sap.ui.define([
         var sCurrentHash = null;
         var bVariableInitialized = false;
         var bHashChanged = true;
+
+        if ( oCodeSettings.authentification === 'FIORI' ) {
+            sCode += "  await utils.launchpadLogin(t, '<USER>', '<PASSWORD>');\n";
+        }   
         for (var i = 0; i < aElements.length; i++) {
             var aLines = [];
             if (aElements[i].property.type !== "SUP") {
