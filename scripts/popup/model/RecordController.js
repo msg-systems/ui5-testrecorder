@@ -145,37 +145,42 @@ sap.ui.define([
     };
 
 
-    RecordController.prototype.injectScript = function (sTabId) {
-        var that = this;
+    RecordController.prototype.injectScript = function (iTabId, sTabUrl) {
+        var iId = iTabId;
+        var sUrl = sTabUrl;
         return new Promise(function (resolve, reject) {
             this._oInitializedPromise = new Promise(function (resolve, reject) {
                 this._oInitPromiseResolve = resolve;
                 this._oInitPromiseReject = reject;
-                chrome.tabs.query({ active: true, currentWindow: false }, function (tabs) {
-                    var aData = [];
-                    for (var i = 0; i < tabs.length; i++) {
-                        if (sTabId && sTabId !== tabs[i].id) {
-                            continue;
+                if(iId && sUrl) {
+                    this._injectIntoTab(iId, sUrl);
+                } else {
+                    chrome.tabs.query({active: true, currentWindow: false}, function (tabs) {
+                        var aData = [];
+                        for (var i = 0; i < tabs.length; i++) {
+                            if (iId && iId !== tabs[i].id) {
+                                continue;
+                            }
+                            if (tabs[i].url) {
+                                aData.push({
+                                    url: tabs[i].url,
+                                    id: tabs[i].id
+                                });
+                            }
                         }
-                        if (tabs[i].url) {
-                            aData.push({
-                                url: tabs[i].url,
-                                id: tabs[i].id
-                            });
+                        if (aData.length === 0) {
+                            MessageToast.show("There is no tab, which can be used for recording");
+                            reject();
+                            return;
                         }
-                    }
-                    if (aData.length === 0) {
-                        MessageToast.show("There is no tab, which can be used for recording");
-                        reject();
-                        return;
-                    }
-                    if (aData.length > 1) {
-                        that._oModel.setProperty("/urls", aData);
-                        that._oURLPopover.open();
-                    } else {
-                        that._injectIntoTab(aData[0].id, aData[0].url);
-                    }
-                });
+                        if (aData.length > 1) {
+                            this._oModel.setProperty("/urls", aData);
+                            this._oURLPopover.open();
+                        } else {
+                            this._injectIntoTab(aData[0].id, aData[0].url);
+                        }
+                    }.bind(this));
+                }
             }.bind(this));
             this._oInitializedPromise.then(resolve, function () {
                 reject();

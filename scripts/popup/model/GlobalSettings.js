@@ -309,7 +309,7 @@ sap.ui.define([
                     for (var i = 0; i < oMetadata.length; i++) {
                         var sElementName = oMetadata[i].elementName;
                         var oType = _oElementModelValues[sElementName];
-                        
+
                         if (oType) {
                             for (var sModel in oType) {
 

@@ -72,7 +72,6 @@
                             });
                         }
                         setTimeout(function () {
-
                             if (request.type) {
                                 oLastAnswer[request.uuid] = { data: null, uuid: request.uuid, resolver: sendResponse };
                                 var bSend = false;
@@ -96,10 +95,10 @@
                                     }
                                 });
                             }
-                        });
+                        }, 0);
 
                         return true; //allow async processing..
-                    }, 0);
+                    });
             }, function () {
                 chrome.runtime.sendMessage({ type: "loaded", data: { ok: false } }, function (response) {
                 });
