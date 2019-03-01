@@ -30,7 +30,7 @@ sap.ui.define([
                     },
                     {
                         key: "NAT",
-                        text: "Natural"
+                        text: "Natural (Experimental)"
                     }
                 ],
                 naturalLanguages: [
