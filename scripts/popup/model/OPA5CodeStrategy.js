@@ -73,8 +73,9 @@ sap.ui.define([
 
     OPA5CodeStrategy.prototype.__setupHeader = function () {
         var sHeader = 'sap.ui.define([\n';
+        sHeader += '    "sap/ui/test/Opa5",\n';
         sHeader += '    "sap/ui/test/opaQunit"\n';
-        sHeader += '], function (opaTest) {\n';
+        sHeader += '], function (Opa5, opaTest) {\n';
         sHeader += '    "use strict";\n\n';
         this.__code.content.push(sHeader);
     };
@@ -112,7 +113,8 @@ sap.ui.define([
         var aParts = [Array(4).join(' ') + 'opaTest('];
         aParts.push('"'+ oAppDetails.testName +' App Start"');
         aParts.push(', function(Given, When, Then) {\n');
-        aParts.push(Array(8).join(' ') + 'Given.iStartTheAppByUrl({fullUrl: \"' + oAppDetails.testUrl + '\"});\n')
+        aParts.push(Array(8).join(' ') + 'Given.iStartTheAppByUrl({fullUrl: \"' + oAppDetails.testUrl + '\"});\n');
+        aParts.push(Array(8).join(' ') + 'Opa5.assert.expect(0);');
         aParts.push(Array(4).join(' ') + '});\n\n');
 
         this.__code.content.push(aParts.reduce((a,b) => a + b, ''));
@@ -122,7 +124,8 @@ sap.ui.define([
         var aParts = [Array(4).join(' ') + 'opaTest('];
         aParts.push('"'+ oAppDetails.testName +' App Teardown"');
         aParts.push(', function(Given, When, Then) {\n');
-        aParts.push(Array(8).join(' ') + 'Given.iTeardownTheApp();\n')
+        aParts.push(Array(8).join(' ') + 'Given.iTeardownTheApp();\n');
+        aParts.push(Array(8).join(' ') + 'Opa5.assert.expect(0);');
         aParts.push(Array(4).join(' ') + '});\n');
 
         this.__code.content.push(aParts.reduce((a,b) => a + b, ''));
