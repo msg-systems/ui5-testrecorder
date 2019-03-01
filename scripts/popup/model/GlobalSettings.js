@@ -8,10 +8,12 @@ sap.ui.define([
         constructor: function () {
             var oJSON = {
                 settings: {
-                    defaultLanguage: "UI5"
+                    defaultLanguage: "UI5",
+                    defaultNatLanguage: "EN"
                 },
                 settingsDefault: {
-                    defaultLanguage: "UI5"
+                    defaultLanguage: "UI5",
+                    defaultNatLanguage: "EN"
                 },
                 codeLanguages: [
                     {
@@ -25,8 +27,22 @@ sap.ui.define([
                     {
                         key: "OPA",
                         text: "OPA5 (Beta)"
+                    },
+                    {
+                        key: "NAT",
+                        text: "Natural"
                     }
                 ],
+                naturalLanguages: [
+                    {
+                        key: "EN",
+                        text: "English"
+                    },
+                    {
+                        key: "DE",
+                        text: "German"
+                    }
+                ]
             };
             this._oModel = new JSONModel(oJSON);
             this._initSettings();

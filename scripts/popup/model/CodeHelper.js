@@ -1,11 +1,15 @@
 sap.ui.define([
     "sap/ui/base/Object",
     "sap/ui/model/json/JSONModel",
-    "com/ui5/testing/model/OPA5CodeStrategy"
-], function (UI5Object, JSONModel, OPA5CodeStrategy) {
+    "com/ui5/testing/model/OPA5CodeStrategy",
+    "com/ui5/testing/model/NaturalCodeStrategy"
+], function (UI5Object, JSONModel, OPA5CodeStrategy, NaturalCodeStrategy) {
     "use strict";
 
     var CodeHelper = UI5Object.extend("com.ui5.testing.model.CodeHelper", {
+        /**
+         *  simple constructor
+         */
         constructor: function () {
             this._oModel = new JSONModel();
         }
@@ -15,28 +19,36 @@ sap.ui.define([
         this._aNameStack = {};
 
         this._oModel.setProperty("/codeSettings", oCodeSettings);
-        if (oCodeSettings.language === "OPA") {
-            return this._opaGetCode(oCodeSettings, aElements);;
-        } else if (oCodeSettings.language === "TCF") {
-            return this._testCafeGetCode(aElements);
-        } else if (oCodeSettings.language === "UI5") {
-            return this._ui5GetCode(aElements);
+        switch(oCodeSettings.language) {
+            case 'OPA':
+                return this._opaGetCode(oCodeSettings, aElements);
+            case 'TCF':
+                return this._testCafeGetCode(aElements);
+            case 'UI5':
+                return this._ui5GetCode(aElements);
+            case 'NAT':
+                return this._natGetCode(oCodeSettings, aElements);
+            default:
+                return "";
         }
-        return "";
     };
 
     CodeHelper.prototype.getItemCode = function (sCodeLanguage, oElement) {
         this._aNameStack = {};
 
-        if (sCodeLanguage === "OPA") {
-            return this._getOPACodeFromItem(oElement);
-        } else if (sCodeLanguage === "TCF") {
-            return this._getCodeFromItem(oElement);
-        } else if (sCodeLanguage === "UI5") {
-            var oDef = this._getUI5CodeFromItem(oElement);
-            return oDef.definitons.concat(oDef.code);
+        switch (sCodeLanguage) {
+            case 'OPA':
+                return this._getOPACodeFromItem(oElement);
+            case 'TCF':
+                return this._getCodeFromItem(oElement);
+            case 'UI5':
+                var oDef = this._getUI5CodeFromItem(oElement);
+                return oDef.definitons.concat(oDef.code);
+            case 'NAT':
+                return this._getNatCodeFromItem(oElement);
+            default:
+                return [];
         }
-        return [];
     };
 
     CodeHelper.prototype._ui5GetCode = function (aElements) {
@@ -121,7 +133,6 @@ sap.ui.define([
         aCodes.push(oCodeSpec);
         return aCodes;
     };
-
 
     CodeHelper.prototype._getSelectorToJSONStringRec = function (oObject) {
         var sStringCurrent = "";
@@ -496,6 +507,10 @@ sap.ui.define([
 //        return aCode;
     };
 
+    CodeHelper.prototype._getNatCodeFromItem = function (oElement) {
+        return [new NaturalCodeStrategy().createTestStep(oElement)];
+    };
+
     CodeHelper.prototype._testCafeGetCode = function (aElements) {
         var aCodes = [];
         var bSupportAssistant = this._oModel.getProperty("/codeSettings/supportAssistant");
@@ -684,6 +699,10 @@ sap.ui.define([
     CodeHelper.prototype._opaGetCode = function (oCodeSettings, aElements) {
         return new OPA5CodeStrategy().generate(oCodeSettings, aElements, this);
     };
+
+    CodeHelper.prototype._natGetCode = function (oCodeSettings, aElements) {
+        return new NaturalCodeStrategy().generate(oCodeSettings, aElements, this);
+    }
 
     return new CodeHelper();
 });
