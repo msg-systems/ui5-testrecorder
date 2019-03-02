@@ -208,6 +208,8 @@
                                     </code:CodeEditor>
                                     <FormattedText visible="{= ${viewModel>type} === 'FTXT'}"
                                                    htmlText="{viewModel>code}"/>
+                                    <Text visible="{= ${viewModel>type} === 'CTXT'}"
+                                                   text="{viewModel>code}"/>
 									<Button id="downloadButton"
                                             type="Transparent"
                                             class="btnFloat btnCircle"

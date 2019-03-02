@@ -11,7 +11,7 @@ sap.ui.define([
          *  simple constructor
          */
         constructor: function () {
-            this._oModel = new JSONModel();
+            this._oModel = new JSONModel({});
         }
     });
 
@@ -33,7 +33,7 @@ sap.ui.define([
         }
     };
 
-    CodeHelper.prototype.getItemCode = function (sCodeLanguage, oElement) {
+    CodeHelper.prototype.getItemCode = function (sCodeLanguage, oElement, oExecComponent) {
         this._aNameStack = {};
 
         switch (sCodeLanguage) {
@@ -45,7 +45,7 @@ sap.ui.define([
                 var oDef = this._getUI5CodeFromItem(oElement);
                 return oDef.definitons.concat(oDef.code);
             case 'NAT':
-                return this._getNatCodeFromItem(oElement);
+                return this._getNatCodeFromItem(oElement, oExecComponent);
             default:
                 return [];
         }
@@ -436,75 +436,7 @@ sap.ui.define([
     };
 
     CodeHelper.prototype._getOPACodeFromItem = function (oElement) {
-        /*
-        var sCode = "";
-        var aCode = [];
-
-        var oSelector = oElement.selector;
-        var sType = oElement.property.type; // SEL | ACT | ASS
-        var sActType = oElement.property.actKey; //PRS|TYP
-
-        //(1) first: build up the actual selector
-        var sSelectorAttributes = "";
-
-        sSelectorAttributes = oSelector.selectorAttributesStringified;
-        var sSelectorFinal = sSelectorAttributes;
-        if (!oElement.item.viewProperty.localViewName) {
-            oElement.item.viewProperty.localViewName = "Unknown";
-        }
-        var sCurrentPage = oElement.item.viewProperty.localViewName;
-        sCurrentPage = "onThe" + sCurrentPage + "Page";
-
-        var sAction = "";
-        if (sType === 'ACT') {
-            sCode = "When." + sCurrentPage + ".";
-            switch (sActType) {
-                case "PRS":
-                    sAction = "iPressElement";
-                    break;
-                case "TYP":
-                    sAction = "iEnterText";
-                    break;
-                default:
-                    return "";
-            }
-
-            sCode = sCode + sAction + "(" + sSelectorFinal;
-            if (sActType == "TYP") {
-                sCode = sCode + ',"' + oElement.property.selectActInsert + '"';
-            }
-            sCode = sCode + ");";
-            aCode = [sCode];
-        } else if (sType === 'ASS') {
-            if (oElement.assertion.assertType === "ATTR") {
-                for (var i = 0; i < oElement.assertion.assertCode.length; i++) {
-                    var oAss = oElement.assertion.assertCode[i];
-
-                    // we could make 100 of mock methods here to make that more OPA style.. but...ya..
-                    sCode = "Then." + sCurrentPage + ".theExpactationIs(" + sSelectorFinal + ",'" + oAss.assertLocation + "','" + oAss.assertType + "',";
-
-                    if (typeof oAss.assertValue === "boolean") {
-                        sCode += oAss.assertValue;
-                    } else if (typeof oAss.assertValue === "number") {
-                        sCode += oAss.assertValue;
-                    } else {
-                        sCode += '"' + oAss.assertValue + '"';
-                    }
-                    sCode += ");"
-
-                    aCode.push(sCode);
-                }
-            } else if (oElement.assertion.assertType === "EXS") {
-                sCode = "Then." + sCurrentPage + ".theElementIsExisting(" + sSelectorFinal + ");"
-                aCode = [sCode];
-            } else if (oElement.assertion.assertType === "MTC") {
-                sCode = "Then." + sCurrentPage + ".theElementIsExistingNTimes(" + sSelectorFinal + "," + oElement.assertion.assertMatchingCount + ");"
-                aCode = [sCode];
-            }
-        }
-        */
         return [new OPA5CodeStrategy().createTestStep(oElement)];
-//        return aCode;
     };
 
     CodeHelper.prototype._getNatCodeFromItem = function (oElement) {

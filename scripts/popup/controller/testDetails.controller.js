@@ -402,6 +402,7 @@ sap.ui.define([
         var aStoredItems = this.getModel("navModel").getProperty("/elements");
         var codeSettings = this.getModel('viewModel').getProperty('/codeSettings');
         codeSettings.language = this.getModel('settings').getProperty('/settings/defaultLanguage');
+        codeSettings.execComponent = this.getOwnerComponent();
         this._oModel.setProperty("/codes", CodeHelper.getFullCode(codeSettings, aStoredItems));
     };
 
