@@ -18,7 +18,7 @@ sap.ui.define([
                 codeLanguages: [
                     {
                         key: "UI5",
-                        text: "ui5-uiveri5"
+                        text: "UIVeri5"
                     },
                     {
                         key: "TCF",
