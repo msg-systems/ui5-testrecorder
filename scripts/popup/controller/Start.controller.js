@@ -59,7 +59,7 @@ sap.ui.define([
                 chrome.tabs.query({currentWindow: false}, function (tabs) {
                     var aData = [];
                     for (var i = 0; i < tabs.length; i++) {
-                        if (tabs[i].url) {
+                        if (tabs[i].url && tabs[i].url.indexOf('chrome:') < 0) {
                             function checkUI5() {
                                 return [].slice.call(document.head.getElementsByTagName('script')).filter(function (s) {
                                     return s.src.indexOf('sap-ui-core.js') > -1;

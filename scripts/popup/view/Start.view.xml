@@ -26,7 +26,7 @@
                                     <Title text="Tabs with UI5 applications ready for recording"/>
                                     <ToolbarSpacer/>
                                     <Text text="Filter by UI5 context"/>
-                                    <Switch Tooltip="Filter by UI5 context" id="ui5Switch" change="ui5Change"/>
+                                    <Switch tooltip="Filter by UI5 context" id="ui5Switch" change="ui5Change"/>
                                     <Button text="{i18n>reload}" press="onReloadTable"
                                             icon="sap-icon://synchronize"/>
                                 </Toolbar>
