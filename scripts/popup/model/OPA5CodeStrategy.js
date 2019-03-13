@@ -4,6 +4,7 @@ sap.ui.define([
 ], function (UI5Object, PageBuilder, CodeHelper) {
     "use strict";
     var OPA5CodeStrategy = UI5Object.extend("com.ui5.testing.model.OPA5CodeStrategy", {
+        jsonKeyRegex: /\"(\w+)\"\:/g,
         constructor: function () {
             this.__pages = {};
             this.__code = {
@@ -35,7 +36,11 @@ sap.ui.define([
 
         this.__createConstants(aElements);
 
-        this.__code.content.push('\n\n   QUnit.module("' + oCodeSettings.testCategory + '");\n\n');
+        this.__code.content.push('\n'
+            + Array(2).join('\t')
+            + 'QUnit.module("'
+            + oCodeSettings.testCategory
+            + '");\n\n');
 
         this.__createAppStartStep(oCodeSettings);
 
@@ -53,7 +58,7 @@ sap.ui.define([
         Object.keys(this.__pages).forEach(function (key) {
             order = order++;
             var oCode = {
-                codeName: key,
+                codeName: key + 'Page',
                 type: 'CODE',
                 order: order,
                 code: this.__pages[key].generate()
@@ -72,12 +77,12 @@ sap.ui.define([
     };
 
     OPA5CodeStrategy.prototype.__setupHeader = function () {
-        var sHeader = 'sap.ui.define([\n';
-        sHeader += '    "sap/ui/test/Opa5",\n';
-        sHeader += '    "sap/ui/test/opaQunit"\n';
-        sHeader += '], function (Opa5, opaTest) {\n';
-        sHeader += '    "use strict";\n\n';
-        this.__code.content.push(sHeader);
+        var aCode = ['sap.ui.define([\n'];
+        aCode.push(Array(2).join('\t') + '"sap/ui/test/Opa5",\n');
+        aCode.push(Array(2).join('\t') + '"sap/ui/test/opaQunit"\n');
+        aCode.push('], function (Opa5, opaTest) {\n');
+        aCode.push(Array(2).join('\t') + '"use strict";\n');
+        this.__code.content.push(aCode.reduce((a, b) => a + b, ''));
     };
 
     OPA5CodeStrategy.prototype.__createConstants = function (aElements) {
@@ -98,7 +103,13 @@ sap.ui.define([
             }
         }.bind(this));
         if (this.__code.constants.length > 0) {
-            var constants = Array(4).join(' ') + 'var ' + this.__code.constants.map(c => Array(9).join(' ') + c.symbol + ' = \"' + c.value + '\"').reduce((a, b) => a + ',\n' + b, '').substring(2) + ';';
+            var constants = Array(2).join('\t')
+                + 'var '
+                + this.__code.constants
+                    .map(c => Array(9).join(' ') + c.symbol + ' = \"' + c.value + '\"')
+                    .reduce((a, b) => a + ',\n' + b, '')
+                    .substring(2)
+                + ';';
             this.__code.content.push(constants.replace(/var\s{9}/g, 'var  '));
         }
     };
@@ -110,29 +121,29 @@ sap.ui.define([
     };
 
     OPA5CodeStrategy.prototype.__createAppStartStep = function (oAppDetails) {
-        var aParts = [Array(4).join(' ') + 'opaTest('];
+        var aParts = [Array(2).join('\t') + 'opaTest('];
         aParts.push('"' + oAppDetails.testName + ' App Start"');
-        aParts.push(', function(Given, When, Then) {\n');
-        aParts.push(Array(8).join(' ') + 'Given.iStartTheAppByUrl({fullUrl: \"' + oAppDetails.testUrl + '\"});\n');
-        aParts.push(Array(8).join(' ') + 'Opa5.assert.expect(0);');
-        aParts.push(Array(4).join(' ') + '});\n\n');
+        aParts.push(', function(Given) {\n'); //When, Then not needed as parameter here
+        aParts.push(Array(3).join('\t') + 'Given.iStartTheAppByUrl({fullUrl: \"' + oAppDetails.testUrl + '\"});\n');
+        aParts.push(Array(3).join('\t') + 'Opa5.assert.expect(0);\n');
+        aParts.push(Array(2).join('\t') + '});\n\n');
 
         this.__code.content.push(aParts.reduce((a, b) => a + b, ''));
     };
 
     OPA5CodeStrategy.prototype.__createAppCloseStep = function (oAppDetails) {
-        var aParts = [Array(4).join(' ') + 'opaTest('];
+        var aParts = [Array(2).join('\t') + 'opaTest('];
         aParts.push('"' + oAppDetails.testName + ' App Teardown"');
-        aParts.push(', function(Given, When, Then) {\n');
-        aParts.push(Array(8).join(' ') + 'Given.iTeardownTheApp();\n');
-        aParts.push(Array(8).join(' ') + 'Opa5.assert.expect(0);');
-        aParts.push(Array(4).join(' ') + '});\n');
+        aParts.push(', function(Given) {\n'); //When, Then not needed as parameter here
+        aParts.push(Array(3).join('\t') + 'Given.iTeardownTheApp();\n');
+        aParts.push(Array(3).join('\t') + 'Opa5.assert.expect(0);\n');
+        aParts.push(Array(2).join('\t') + '});\n');
 
         this.__code.content.push(aParts.reduce((a, b) => a + b, ''));
     };
 
     OPA5CodeStrategy.prototype.__createTestSteps = function (oAppDetails, aTestSteps) {
-        var aParts = [Array(4).join(' ') + 'opaTest('];
+        var aParts = [Array(2).join('\t') + 'opaTest('];
         aParts.push('"' + oAppDetails.testName + ' Testing"');
         aParts.push(', function(Given, When, Then) {\n');
 
@@ -144,7 +155,7 @@ sap.ui.define([
             }
         }
 
-        aParts.push(Array(4).join(' ') + '});\n\n');
+        aParts.push(Array(2).join('\t') + '});\n\n');
 
         this.__code.content.push(aParts.reduce((a, b) => a + b, ''));
     };
@@ -224,45 +235,53 @@ sap.ui.define([
                     endObject[key] = aSelectors[key];
             }
         }
-        return JSON.stringify(endObject);
+
+        var sSelectorParts = JSON.stringify(endObject);
+        let m;
+        let repl = {};
+
+        while ((m = this.jsonKeyRegex.exec(sSelectorParts)) !== null) {
+            repl[m[1]] = m[0];
+        }
+        Object.keys(repl).forEach(key => {sSelectorParts = sSelectorParts.replace(repl[key], key + ': ')})
+        return sSelectorParts;
     };
 
     OPA5CodeStrategy.prototype.__createEnterTextAction = function (oStep) {
         var selectors = oStep.selector.selectorUI5.own;
-        var actionInsert = oStep.property.selectActInsert;
-        var controlClass = oStep.item.metadata.elementName;
         var viewName = oStep.item.viewProperty.localViewName;
-        var controlID = oStep.item.identifier.ui5LocalId;
         this.__pages[viewName].addEnterTextFunction();
 
-        var aParts = [Array(8).join(' ') + 'When.'];
+        var aParts = [Array(3).join('\t') + 'When.'];
         aParts.push('on' + viewName);
         aParts.push('.enterText(');
 
-        var aSelectorParts = this.__createSelectorProperties(selectors);
-
-        aParts.push(aSelectorParts);
-        aParts.push(');');
+        //var sSelectorParts = this.__createSelectorProperties(selectors);
+        //aParts.push(sSelectorParts);
+        aParts.push('{');
+        this.__createObjectMatcherInfos(oStep, aParts);
+        aParts.push(', actionText: "' + oStep.property.selectActInsert + '"');
+        aParts.push('});');
 
         return aParts.reduce((a, b) => a + b, '');
     };
 
     OPA5CodeStrategy.prototype.__createPressAction = function (oStep) {
         var selectors = oStep.selector.selectorUI5.own;
-        var actionInsert = oStep.property.selectActInsert;
-        var controlClass = oStep.item.metadata.elementName;
         var viewName = oStep.item.viewProperty.localViewName;
-        var controlID = oStep.item.identifier.ui5LocalId;
         this.__pages[viewName].addPressFunction();
 
-        var aParts = [Array(8).join(' ') + 'When.'];
+        var aParts = [Array(3).join('\t') + 'When.'];
         aParts.push('on' + viewName);
         aParts.push('.press(');
 
-        var aSelectorParts = this.__createSelectorProperties(selectors);
+        //var sSelectorParts = this.__createSelectorProperties(selectors);
+        //aParts.push(sSelectorParts);
 
-        aParts.push(aSelectorParts);
-        aParts.push(');');
+        aParts.push('{');
+        this.__createObjectMatcherInfos(oStep, aParts);
+
+        aParts.push('});');
         return aParts.reduce((a, b) => a + b, '');
 
     };
@@ -272,13 +291,15 @@ sap.ui.define([
             return this.__createAggregationCheck(oStep);
         } else {
             this.__pages[oStep.item.viewProperty.localViewName].addExistFunction();
-            var aParts = [Array(8).join(' ') + 'Then.'];
+            var aParts = [Array(3).join('\t') + 'Then.'];
             aParts.push('on' + oStep.item.viewProperty.localViewName);
-            aParts.push('.iShouldSeeTheProperty({');
+            aParts.push('.iShouldSeeTheProperty(');
+
+            aParts.push('{');
 
             this.__createObjectMatcherInfos(oStep, aParts);
 
-            aParts.push('});')
+            aParts.push('});');
 
             return aParts.reduce((a, b) => a + b, '');
         }
@@ -291,7 +312,7 @@ sap.ui.define([
             //var statBindings = Object.keys(oStep.item.binding).filter(k => oStep.item.binding[k].static).map(i => ({attributeName: i, i18nLabel: oStep.item.binding[i].path}));
             switch (aToken[id].criteriaType) {
                 case 'ID':
-                    objectMatcher['ID'] = 'id: \"' + aToken[id].criteriaValue + '\"';
+                    objectMatcher['ID'] = 'id: {value: "'+ aToken[id].criteriaValue +'",isRegex: false}';
                     break;
                 case 'ATTR':
                     this.__createAttrValue(aToken[id], objectMatcher);
@@ -302,6 +323,10 @@ sap.ui.define([
                 case 'BNDG':
                     objectMatcher['BNDG'] = 'i18n: {property: \"' + aToken[id].subCriteriaType + '\", path: \"' + oStep.attributeFilter[id].criteriaValue + '\"}';
                     break;
+                case 'BDG':
+                    objectMatcher['BDG'] = "whatever";
+                    console.log('No property given for binding');
+                    break;
                 case 'AGG':
                     break; //need to be because this are no relevant object infos
                 default:
@@ -310,7 +335,7 @@ sap.ui.define([
         }
 
         for (var k in objectMatcher) {
-            if (k !== 'ATTR') {
+            if (k !== 'ATTR' && k !== 'BDG') {
                 aParts.push(objectMatcher[k] + ', ');
             }
         }
@@ -344,23 +369,23 @@ sap.ui.define([
             if(oAGGProp.operatorType === 'EQ') {
                 this.__pages[oStep.item.viewProperty.localViewName].addAggregationEmpty();
                 aParts.push('.iAggregationEmpty({');
-                aParts.push('objectProps: {')
+                aParts.push('objectProps: ')
             }
 
             if(oAGGProp.operatorType === 'GT') {
                 this.__pages[oStep.item.viewProperty.localViewName].addAggregationFilled();
                 aParts.push('.iAggregationFilled({');
-                aParts.push('objectProps: {')
+                aParts.push('objectProps: ')
             }
         } else {
             this.__pages[oStep.item.viewProperty.localViewName].addAggregationCount();
             aParts.push('.iAggregationCounts({');
-            aParts.push('objectProps: {');
+            aParts.push('objectProps: ');
         }
 
         this.__createObjectMatcherInfos(oStep, aParts);
 
-        aParts.push('}, ');
+        aParts.push(', ');
 
         if(oAGGProp.criteriaValue > 0){
             aParts.push('count: ');
@@ -380,41 +405,41 @@ sap.ui.define([
     OPA5CodeStrategy.prototype.__generateCommonPage = function () {
         var aCode = [];
         aCode.push('sap.ui.define([\n');
-        aCode.push(Array(4).join(' ') + '"sap/ui/test/Opa5",\n');
-        aCode.push(Array(4).join(' ') + '"' + this.__namespace.replace(/\./g, '/') + "/MockServer" + '"\n');
+        aCode.push(Array(2).join('\t') + '"sap/ui/test/Opa5",\n');
+        aCode.push(Array(2).join('\t') + '"' + this.__namespace.replace(/\./g, '/') + "/<testPath>/MockServer" + '"\n');
         aCode.push('], function(Opa5, MockServer) {\n');
-        aCode.push(Array(4).join(' ') + '"use strict";\n\n');
-        aCode.push(Array(4).join(' ') + 'var bInOpaPage = location.toString().indexOf("opaTests.qunit.html") !== -1 &&\n');
-        aCode.push(Array(21).join(' ') + 'jQuery.sap.getUriParameters().get("component") !== "true";\n\n');
-        aCode.push(Array(4).join(' ') + 'function _wrapParameters(oParameters) {\n');
-        aCode.push(Array(8).join(' ') + 'return {\n');
-        aCode.push(Array(12).join(' ') + 'get: function(name) {\n');
-        aCode.push(Array(16).join(' ') + 'return (oParameters[name] || "").toString();\n');
-        aCode.push(Array(12).join(' ') + '}\n');
-        aCode.push(Array(8).join(' ') + '};\n');
-        aCode.push(Array(4).join(' ') + '}\n\n');
-        aCode.push(Array(4).join(' ') + 'return Opa5.extend("' + this.__namespace + '.test.integration.Common", {\n');
-        aCode.push(Array(8).join(' ') + 'iStartTheAppByUrl: function(oParameters) {\n');
-        aCode.push(Array(12).join(' ') + 'if (bInOpaPage || oParameters.fullUrl) {\n');
-        aCode.push(Array(16).join(' ') + 'this.iStartMyAppInAFrame(oParameters.fullUrl);\n');
-        aCode.push(Array(12).join(' ') + '} else {\n');
-        aCode.push(Array(16).join(' ') + 'MockServer.init(_wrapParameters(oParameters || {}));\n');
-        aCode.push(Array(16).join(' ') + 'this.iStartMyUIComponent({\n');
-        aCode.push(Array(20).join(' ') + 'componentConfig: {\n');
-        aCode.push(Array(24).join(' ') + 'name: "' + this.__namespace + '",\n');
-        aCode.push(Array(24).join(' ') + 'async: true\n');
-        aCode.push(Array(20).join(' ') + '}\n');
-        aCode.push(Array(16).join(' ') + '});\n');
-        aCode.push(Array(12).join(' ') + '}\n');
-        aCode.push(Array(8).join(' ') + '},\n');
-        aCode.push(Array(8).join(' ') + 'iTeardownTheApp: function() {\n');
-        aCode.push(Array(12).join(' ') + 'if (bInOpaPage) {\n');
-        aCode.push(Array(16).join(' ') + 'this.iTeardownMyAppFrame();\n');
-        aCode.push(Array(12).join(' ') + '} else {\n');
-        aCode.push(Array(16).join(' ') + 'this.iTeardownMyUIComponent();\n');
-        aCode.push(Array(12).join(' ') + '}\n');
-        aCode.push(Array(8).join(' ') + '}\n');
-        aCode.push(Array(4).join(' ') + '});\n');
+        aCode.push(Array(2).join('\t') + '"use strict";\n\n');
+//        aCode.push(Array(2).join('\t') + 'var bInOpaPage = location.toString().indexOf("opaTests.qunit.html") !== -1 &&\n');
+//        aCode.push(Array(6).join('\t') + 'jQuery.sap.getUriParameters().get("component") !== "true";\n\n');
+        aCode.push(Array(2).join('\t') + 'function _wrapParameters(oParameters) {\n');
+        aCode.push(Array(3).join('\t') + 'return {\n');
+        aCode.push(Array(4).join('\t') + 'get: function(name) {\n');
+        aCode.push(Array(5).join('\t') + 'return (oParameters[name] || "").toString();\n');
+        aCode.push(Array(4).join('\t') + '}\n');
+        aCode.push(Array(3).join('\t') + '};\n');
+        aCode.push(Array(2).join('\t') + '}\n\n');
+        aCode.push(Array(2).join('\t') + 'return Opa5.extend("' + this.__namespace + '.<testPath>.Common", {\n');
+        aCode.push(Array(3).join('\t') + 'iStartTheAppByUrl: function(oParameters) {\n');
+        // aCode.push(Array(4).join('\t') + 'if (bInOpaPage || oParameters.fullUrl) {\n');
+        // aCode.push(Array(5).join('\t') + 'this.iStartMyAppInAFrame(oParameters.fullUrl);\n');
+        // aCode.push(Array(4).join('\t') + '} else {\n');
+        aCode.push(Array(4).join('\t') + 'MockServer.init(_wrapParameters(oParameters || {}));\n');
+        aCode.push(Array(4).join('\t') + 'this.iStartMyUIComponent({\n');
+        aCode.push(Array(5).join('\t') + 'componentConfig: {\n');
+        aCode.push(Array(6).join('\t') + 'name: "' + this.__namespace + '",\n');
+        aCode.push(Array(6).join('\t') + 'async: true\n');
+        aCode.push(Array(5).join('\t') + '}\n');
+        aCode.push(Array(4).join('\t') + '});\n');
+        // aCode.push(Array(4).join('\t') + '}\n');
+        aCode.push(Array(3).join('\t') + '},\n');
+        aCode.push(Array(3).join('\t') + 'iTeardownTheApp: function() {\n');
+        // aCode.push(Array(4).join('\t') + 'if (bInOpaPage) {\n');
+        // aCode.push(Array(5).join('\t') + 'this.iTeardownMyAppFrame();\n');
+        // aCode.push(Array(4).join('\t') + '} else {\n');
+        aCode.push(Array(4).join('\t') + 'this.iTeardownMyUIComponent();\n');
+        // aCode.push(Array(4).join('\t') + '}\n');
+        aCode.push(Array(3).join('\t') + '}\n');
+        aCode.push(Array(2).join('\t') + '});\n');
         aCode.push('});');
         return aCode.reduce((a, b) => a + b, '');
     }
