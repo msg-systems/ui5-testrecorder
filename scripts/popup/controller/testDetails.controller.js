@@ -250,6 +250,7 @@ sap.ui.define([
             createdAt: new Date().getTime()
         });
         this._oModel.setProperty("/codeSettings/language", this.getModel("settings").getProperty("/settings/defaultLanguage"));
+        this._oModel.setProperty("/codeSettings/authentification", this.getModel("settings").getProperty("/settings/defaultAuthentification"));
         Communication.fireEvent("getwindowinfo").then(function (oData) {
             if (!oData) {
                 return;

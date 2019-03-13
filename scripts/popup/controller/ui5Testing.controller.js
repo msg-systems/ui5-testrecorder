@@ -378,6 +378,30 @@ sap.ui.define([
             stepExecuted: true
         };
 
+        //adjust the technical name if duplicates..
+        var aProp = this.getModel("navModel").getProperty("/elements");
+        var bFound = true;
+        var iIndex = 1;
+        var sNameOriginal = oReturn.property.technicalName;
+        while (bFound === true) {
+            bFound = false;
+            for (var i = 0; i < aProp.length; i++) {
+                if (aProp[i].item.identifier.ui5AbsoluteId === oReturn.item.identifier.ui5AbsoluteId) {
+                    //reuse the same like before - whatever was provided..
+                    oReturn.property.technicalName = aProp[i].property.technicalName;
+                    break;
+                }
+
+                if (aProp[i].property.technicalName === oReturn.property.technicalName &&
+                    aProp[i].item.identifier.ui5AbsoluteId !== oReturn.item.identifier.ui5AbsoluteId) {
+                    oReturn.property.technicalName = sNameOriginal + iIndex;
+                    iIndex = iIndex + 1;
+                    bFound = true;
+                    break;
+                }
+            }
+        }
+
         return new Promise(function (resolve, reject) {
             Communication.fireEvent("getwindowinfo").then(function (oData) {
                 if (!oData) {
@@ -595,7 +619,7 @@ sap.ui.define([
                         }
                     }
                 }
-                resolve( aItemsEnhanced );
+                resolve(aItemsEnhanced);
             }.bind(this))
         }.bind(this));
     };
@@ -1043,7 +1067,7 @@ sap.ui.define([
                 this._oModel.setProperty("/element/property/selectItemBy", "UI5");
             }
 
-            if (typeof oMerged.defaultBlur !== "undefined" && oMerged.defaultBlur !== null ) {
+            if (typeof oMerged.defaultBlur !== "undefined" && oMerged.defaultBlur !== null) {
                 this._oModel.setProperty("/element/property/actionSettings/blur", oMerged.defaultBlur);
             }
 
@@ -1060,11 +1084,12 @@ sap.ui.define([
             var sName = oItem.metadata.elementName.split(".").splice(-1).pop();
             if (oItem.binding && oItem.binding.value && oItem.binding.value.path) {
                 sName = oItem.binding.value.path + sName;
-            } else if (oItem.label && oItem.label.binding && oItem.label.binding.text && oItem.label.binding.text.static === true ) {
+            } else if (oItem.label && oItem.label.binding && oItem.label.binding.text && oItem.label.binding.text.static === true) {
                 sName = oItem.label.binding.text.path + sName;
             }
-            sName = sName.substr(0, 1).toLowerCase() + sName.substr( 1 );
+            sName = sName.substr(0, 1).toLowerCase() + sName.substr(1);
 
+            //check if the technical name is already given
             this._oModel.setProperty("/element/property/technicalName", sName);
 
             this._getFoundElements().then(function (aReturn) {
@@ -1399,7 +1424,7 @@ sap.ui.define([
     TestHandler.prototype._createActionPopover = function () {
         if (!this._oPopoverAction) {
             this._oPopoverAction = sap.ui.xmlfragment(
-                "com.ui5.testing.view.PopoverActionSettings",
+                "com.ui5.testing.fragment.PopoverActionSettings",
                 this
             );
             this._oPopoverAction.setModel(this._oModel, "viewModel");
@@ -1424,6 +1449,8 @@ sap.ui.define([
         var oInput = this.byId("inpTypeText");
         var oConfirm = this.byId("btSave");
         if (this._oModel.getProperty("/element/property/actKey") === "TYP") {
+            oInput.focus();
+
             setTimeout(function () {
                 oInput.focus();
             }, 100);
@@ -1546,7 +1573,7 @@ sap.ui.define([
             var sSelectType = oElement.property.selectItemBy; //DOM | UI5 | ATTR
             var sExpectedCount = this._oModel.getProperty("/element/property/assKeyMatchingCount");
             this._getFoundElements().then(function (aFound) {
-                if(oItem.identifier) {
+                if (oItem.identifier) {
                     if (oItem.identifier.idGenerated == true && sSelectType === "UI5") {
                         aMessages.push({
                             type: "Error",
@@ -1760,15 +1787,3 @@ sap.ui.define([
 
     return TestHandler;
 });
-
-//on puprose the stuff below is local, to make the copy between the different APIs simpler (still copy & paste is shitty ofc)
-var _oElementModelValues = {
-    "sap.m.GenericTile": {
-        "undefined": {
-            "/config/navigation_semantic_action": "Navigation-Semantic Action",
-            "/config/navigation_semantic_object": "Navigation-Semantic Object",
-            "/config/navigation_semantic_parameters": "Navigation-Semantic Paramters",
-            "/config/navigation_target_url": "Navigation-Semantic URL"
-        }
-    }
-};

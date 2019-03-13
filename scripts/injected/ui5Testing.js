@@ -1087,6 +1087,7 @@ else {
             },
             "sap.m.ObjectListItem": {
                 cloned: true,
+                defaultInteraction: "root",
                 preferredProperties: ["title"]
             },
             "sap.m.Button": {
@@ -1313,18 +1314,6 @@ else {
     };
 
     TestHandlerSingleton = new TestHandler();
-
-    //on puprose the stuff below is local, to make the copy between the different APIs simpler (still copy & paste is shitty ofc)
-    var _oElementModelValues = {
-        "sap.m.GenericTile": {
-            "undefined": {
-                "/config/navigation_semantic_action": "Navigation-Semantic Action",
-                "/config/navigation_semantic_object": "Navigation-Semantic Object",
-                "/config/navigation_semantic_parameters": "Navigation-Semantic Paramters",
-                "/config/navigation_target_url": "Navigation-Semantic URL"
-            }
-        }
-    };
 
     var _getItemForItem = function (oItem) {
         //(0) check if we are already an item - no issue than..
@@ -1806,27 +1795,6 @@ else {
         //get model information..
         var oMetadata = oItem.getMetadata();
         oReturn.model = {};
-        while (oMetadata) {
-            if (!oMetadata._sClassName) {
-                break;
-            }
-            var oType = _oElementModelValues[oMetadata._sClassName];
-            if (oType) {
-                for (var sModel in oType) {
-                    sModel = sModel === "undefined" ? undefined : sModel;
-                    oReturn.model[sModel] = {};
-                    var oCurrentModel = oItem.getModel(sModel);
-                    if (!oCurrentModel) {
-                        continue;
-                    }
-                    for (var sProperty in oType[sModel]) {
-                        oReturn.model[sModel][sProperty] = oCurrentModel.getProperty(sProperty);
-                    }
-                }
-            }
-
-            oMetadata = oMetadata.getParent();
-        }
 
         //return length of all aggregations
         var aMetadata = oItem.getMetadata().getAllAggregations();
@@ -1880,8 +1848,6 @@ else {
             if (!oBindingContext) {
                 continue;
             }
-
-            //only add those attributes, which are allowed as per _oElementModelValues..
 
             var oCtxData = oBindingContext.getObject();
             oReturn[sModel] = {};

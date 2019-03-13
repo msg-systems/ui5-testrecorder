@@ -1,17 +1,6 @@
 sap.ui.define([
 ], function(){
     return {
-        //on puprose the stuff below is local, to make the copy between the different APIs simpler (still copy & paste is shitty ofc)
-        _oElementModelValues: {
-            "sap.m.GenericTile": {
-                undefined: {
-                    "/config/navigation_semantic_action": "Navigation-Semantic Action",
-                    "/config/navigation_semantic_object": "Navigation-Semantic Object",
-                    "/config/navigation_semantic_parameters": "Navigation-Semantic Paramters",
-                    "/config/navigation_target_url": "Navigation-Semantic URL"
-                }
-            }
-        },
         statics: {
             stepTypes: [
                 {key: "ACT", text: "Action"},
@@ -29,7 +18,8 @@ sap.ui.define([
             ],
             selTypes: [
                 {key: "UI5", text: "UI5-Identifier"},
-                {key: "ATTR", text: "Combination of Attributes"}
+                {key: "ATTR", text: "Combination of Attributes"},
+                {key: 'DOM', text: "DOM-Identifiert"}
             ],
             attrType: [
                 {key: "OWN", text: "Own Element"},
